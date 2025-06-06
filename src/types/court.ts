@@ -1,11 +1,18 @@
-export const Court = {
-  id: String,
-  name: String,
-  address: String,
-  city: String,
-  state: String,
-  zipCode: String,
-  phone: String,
-  email: String,
-  image: String,
-};
+export interface Court {
+  id: string;
+  nome: string;
+  tipo: string;
+  localizacao: string;
+}
+
+export interface CreateCourtRequest {
+  nome: string;
+  tipo: string;
+  localizacao: string;
+}
+
+export interface UpdateCourtRequest {
+  nome?: string;
+  tipo?: string;
+  localizacao?: string;
+}

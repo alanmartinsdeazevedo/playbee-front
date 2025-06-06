@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition } from "react";
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useState } from "react";
+import { useRouter } from 'next/navigation';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
@@ -15,62 +15,52 @@ import Visibility from '@mui/icons-material/Visibility';
 import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import SportsIcon from '@mui/icons-material/Sports';
 
-import type * as z from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
-import { login } from "@/actions/auth";
+import { AuthService } from "@/lib/auth";
 import { LoginSchema } from "@/lib/validations";
 import PWAInstallButton from "@/components/PWAInstallButton";
 
+type LoginForm = z.infer<typeof LoginSchema>;
+
 const Login = () => {
   const [isPasswordShown, setIsPasswordShown] = useState(false);
-  const [error, setError] = useState<string | undefined>("");
-  const [success, setSuccess] = useState<string | undefined>("");
-  const [showTwoFactor, setShowTwoFactor] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string>("");
+  const [success, setSuccess] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl");
 
-  const form = useForm<z.infer<typeof LoginSchema>>({
+  const form = useForm<LoginForm>({
     resolver: zodResolver(LoginSchema),
     defaultValues: {
       email: "",
-      password: "",
+      senha: "",
     },
   });
 
-  const onSubmit = (values: z.infer<typeof LoginSchema>) => {
+  const onSubmit = async (values: LoginForm) => {
     setError("");
     setSuccess("");
+    setIsLoading(true);
 
-    startTransition(async () => {
-      try {
-        const response = await login(values, callbackUrl);
-
-        if (response?.error) {
-          setError(response.error);
-        }
-
-        if (response?.success) {
-          setSuccess(response.success);
-          
-          // Redirecionar após login bem-sucedido
-          setTimeout(() => {
-            router.push(callbackUrl || "/dashboard");
-          }, 1500);
-        }
-
-        if (response?.twoFactor) {
-          setShowTwoFactor(true);
-        }
-      } catch (err) {
-        console.error("Login error:", err);
-        setError("Algo deu errado. Por favor, tente novamente.");
-      }
-    });
+    try {
+      const user = await AuthService.login(values.email, values.senha);
+      
+      setSuccess(`Bem-vindo, ${user.nome}!`);
+      
+      // Redirecionar após sucesso
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+      
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleClickShowPassword = () => setIsPasswordShown(show => !show);
@@ -115,101 +105,70 @@ const Login = () => {
             </Alert>
           )}
 
-          {/* Formulário de Two Factor */}
-          {showTwoFactor ? (
-            <form
-              noValidate
-              autoComplete='off'
-              onSubmit={form.handleSubmit(onSubmit)}
+          {/* Formulário de Login */}
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <TextField
+              autoFocus
+              fullWidth
+              label='E-mail'
+              type="email"
+              {...form.register("email")}
+              error={!!form.formState.errors.email}
+              helperText={form.formState.errors.email?.message}
+              sx={{ mb: 3 }}
+              disabled={isLoading}
+            />
+            
+            <TextField
+              fullWidth
+              label='Senha'
+              type={isPasswordShown ? 'text' : 'password'}
+              {...form.register("senha")}
+              error={!!form.formState.errors.senha}
+              helperText={form.formState.errors.senha?.message}
+              sx={{ mb: 3 }}
+              disabled={isLoading}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position='end'>
+                    <IconButton
+                      edge='end'
+                      onClick={handleClickShowPassword}
+                      onMouseDown={(e) => e.preventDefault()}
+                      disabled={isLoading}
+                    >
+                      {isPasswordShown ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <Button 
+              fullWidth 
+              variant='contained' 
+              type='submit' 
+              disabled={isLoading}
+              size="large"
+              sx={{ mb: 2 }}
             >
-              <Typography variant="body2" sx={{ mb: 2 }}>
-                Insira o código de verificação de dois fatores enviado para seu e-mail
+              {isLoading ? 'Entrando...' : 'Entrar'}
+            </Button>
+
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Não tem uma conta?{' '}
+                <Button 
+                  variant="text" 
+                  onClick={() => router.push('/register')}
+                  sx={{ textTransform: 'none' }}
+                  disabled={isLoading}
+                >
+                  Cadastre-se
+                </Button>
               </Typography>
-              <TextField
-                autoFocus
-                fullWidth
-                label='Código de verificação'
-                {...form.register("code")}
-                error={!!form.formState.errors.code}
-                helperText={form.formState.errors.code?.message}
-                sx={{ mb: 3 }}
-              />
-              <Button 
-                fullWidth 
-                variant='contained' 
-                type='submit' 
-                disabled={isPending}
-                size="large"
-              >
-                {isPending ? 'Verificando...' : 'Verificar'}
-              </Button>
-            </form>
-          ) : (
-            /* Formulário de Login */
-            <form
-              noValidate
-              autoComplete='off'
-              onSubmit={form.handleSubmit(onSubmit)}
-            >
-              <TextField
-                autoFocus
-                fullWidth
-                label='E-mail'
-                type="email"
-                {...form.register("email")}
-                error={!!form.formState.errors.email}
-                helperText={form.formState.errors.email?.message}
-                sx={{ mb: 3 }}
-              />
-              
-              <TextField
-                fullWidth
-                label='Senha'
-                type={isPasswordShown ? 'text' : 'password'}
-                {...form.register("password")}
-                error={!!form.formState.errors.password}
-                helperText={form.formState.errors.password?.message}
-                sx={{ mb: 3 }}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position='end'>
-                      <IconButton
-                        edge='end'
-                        onClick={handleClickShowPassword}
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        {isPasswordShown ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
-              <Button 
-                fullWidth 
-                variant='contained' 
-                type='submit' 
-                disabled={isPending}
-                size="large"
-                sx={{ mb: 2 }}
-              >
-                {isPending ? 'Entrando...' : 'Entrar'}
-              </Button>
-
-              <Box sx={{ textAlign: 'center' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Não tem uma conta?{' '}
-                  <Button 
-                    variant="text" 
-                    onClick={() => router.push('/register')}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    Cadastre-se
-                  </Button>
-                </Typography>
-              </Box>
-            </form>
-          )}
+            </Box>
+          </form>
         </CardContent>
       </Card>
     </Box>

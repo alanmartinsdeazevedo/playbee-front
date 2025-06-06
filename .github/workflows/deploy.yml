@@ -1,18 +1,123 @@
-name: Docker Image CI
+name: PlayBee Frontend - Deploy
 
 on:
   push:
-    branches: [ "main" ]
+    tags:
+      - 'v*.*.*'
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
-
-  build:
-
+  build-and-deploy:
     runs-on: ubuntu-latest
+    
+    if: github.event_name == 'push'
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag my-image-name:$(date +%s)
+
+    # Extrair versão da tag
+    - name: Extract version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/frontend-v*.*.* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/frontend-}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "🏷️ Deploying tagged version: $VERSION"
+        else
+          VERSION="main-$(echo $GITHUB_SHA | cut -c1-7)"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "🚀 Deploying main branch: $VERSION"
+        fi
+
+    - name: Log in to Docker Hub
+      run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+    # Build imagem Docker
+    - name: Build Docker image
+      run: |
+        echo "🔨 Building PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
+        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }} .
+        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_FRONTEND_IMAGE }}:latest .
+
+    # Push Docker
+    - name: Push Docker image
+      run: |
+        echo "📤 Pushing PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
+        docker push ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
+        docker push ${{ secrets.DOCKER_FRONTEND_IMAGE }}:latest
+
+    - name: Install SSH client
+      run: sudo apt-get install -y openssh-client
+
+    - name: Set up SSH key
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        sed -i '/^$/d' ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+
+    # Deploy no servidor EC2
+    - name: Deploy PlayBee Frontend
+      run: |
+        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+          echo "🚀 Deploying PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
+
+          docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+
+          # Pull da nova versão
+          docker pull ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
+
+          # Backup do container atual
+          docker stop playbee-frontend || true
+          docker rename playbee-frontend playbee-frontend-backup-$(date +%s) || true
+
+          # Deploy da nova versão
+          docker run -d --name playbee-frontend -p 3002:3002 \
+            -e NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
+            -e NEXT_PUBLIC_APP_NAME="PlayBee" \
+            -e NEXT_PUBLIC_PWA_NAME="PlayBee" \
+            -e NEXT_PUBLIC_PWA_SHORT_NAME="PlayBee" \
+            -e NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            --restart unless-stopped \
+            ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
+
+          # Aguardar inicialização
+          sleep 10
+
+          # Verificar se está funcionando
+          if docker ps | grep -q playbee-frontend; then
+            echo "✅ Frontend Deploy successful! Version ${{ steps.version.outputs.VERSION }} is running"
+            
+            # Remover backup se tudo funcionou
+            docker rm playbee-frontend-backup-* 2>/dev/null || true
+            
+            # Mostrar status
+            docker ps | grep playbee-frontend
+            echo "📄 Frontend logs:"
+            docker logs playbee-frontend --tail 15
+          else
+            echo "❌ Frontend Deploy failed! Rolling back..."
+            docker stop playbee-frontend || true
+            docker rm playbee-frontend || true
+
+            # Restaurar backup
+            BACKUP_CONTAINER=$(docker ps -a | grep playbee-frontend-backup | head -1 | awk "{print \$1}")
+            if [ ! -z "$BACKUP_CONTAINER" ]; then
+              docker start $BACKUP_CONTAINER
+              docker rename $BACKUP_CONTAINER playbee-frontend
+              echo "🔄 Frontend Rollback completed"
+            fi
+            exit 1
+          fi
+
+          # Limpeza de imagens antigas
+          echo "🧹 Cleaning old frontend images..."
+          docker images ${{ secrets.DOCKER_FRONTEND_IMAGE }} --format "{{.Tag}}" | grep -E "^(v|main-)" | sort -V | head -n -5 | xargs -I {} docker rmi ${{ secrets.DOCKER_FRONTEND_IMAGE }}:{} 2>/dev/null || true
+        '
