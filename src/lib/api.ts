@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://play.api.beezes.com.br';
 
 class SimpleApiClient {
   private baseUrl: string;
@@ -26,7 +26,6 @@ class SimpleApiClient {
     
     const token = this.getAuthToken();
     
-    // Garantir que options.headers seja do tipo correto
     const optionsHeaders = options.headers as Record<string, string> | undefined;
     
     const headers: Record<string, string> = {
