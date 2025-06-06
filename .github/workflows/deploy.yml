@@ -85,6 +85,7 @@ jobs:
             -e NEXT_PUBLIC_PWA_NAME="PlayBee" \
             -e NEXT_PUBLIC_PWA_SHORT_NAME="PlayBee" \
             -e NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
+            -e PORT=3002 \
             --restart unless-stopped \
             ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
 
