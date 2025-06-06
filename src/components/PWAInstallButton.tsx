@@ -92,7 +92,6 @@ const PWAInstallButton = () => {
     setShowInstallButton(false);
   };
 
-  // Não mostra se não tem prompt ou se foi dispensado
   if (!showInstallButton || !showDismiss) {
     return null;
   }

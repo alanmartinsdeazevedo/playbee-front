@@ -1,6 +1,7 @@
-'use client'
+// src/views/login/Login.tsx
+'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
@@ -21,7 +22,6 @@ import { z } from "zod";
 
 import { AuthService } from "@/lib/auth";
 import { LoginSchema } from "@/lib/validations";
-import PWAInstallButton from "@/components/PWAInstallButton";
 
 type LoginForm = z.infer<typeof LoginSchema>;
 
@@ -30,6 +30,7 @@ const Login = () => {
   const [error, setError] = useState<string>("");
   const [success, setSuccess] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   const router = useRouter();
 
@@ -41,6 +42,11 @@ const Login = () => {
     },
   });
 
+  // Evitar problemas de hidratação
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const onSubmit = async (values: LoginForm) => {
     setError("");
     setSuccess("");
@@ -51,9 +57,9 @@ const Login = () => {
       
       setSuccess(`Bem-vindo, ${user.nome}!`);
       
-      // Redirecionar após sucesso
+      // Redirecionar após sucesso - usando rota absoluta para desktop
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/desktop/dashboard");
       }, 1500);
       
     } catch (err) {
@@ -64,6 +70,37 @@ const Login = () => {
   };
 
   const handleClickShowPassword = () => setIsPasswordShown(show => !show);
+
+  const handleRegisterClick = () => {
+    router.push('/desktop/register');
+  };
+
+  // Renderizar apenas após a hidratação para evitar mismatches
+  if (!isMounted) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        }}
+      >
+        {/* Loading placeholder que é idêntico no servidor e cliente */}
+        <Card sx={{ maxWidth: 400, width: '100%', boxShadow: 3 }}>
+          <CardContent sx={{ p: 4 }}>
+            <Box sx={{ textAlign: 'center' }}>
+              <SportsIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+              <Typography variant="h4" component="h1">
+                PlayBee
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -87,10 +124,10 @@ const Login = () => {
             <Typography variant="body1" color="text.secondary">
               Sistema de Reserva de Quadras Esportivas
             </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Versão Desktop
+            </Typography>
           </Box>
-
-          {/* Botão de Instalação PWA */}
-          <PWAInstallButton />
 
           {/* Alertas */}
           {error && (
@@ -110,7 +147,7 @@ const Login = () => {
             <TextField
               autoFocus
               fullWidth
-              label='E-mail'
+              label="E-mail"
               type="email"
               {...form.register("email")}
               error={!!form.formState.errors.email}
@@ -121,7 +158,7 @@ const Login = () => {
             
             <TextField
               fullWidth
-              label='Senha'
+              label="Senha"
               type={isPasswordShown ? 'text' : 'password'}
               {...form.register("senha")}
               error={!!form.formState.errors.senha}
@@ -130,9 +167,9 @@ const Login = () => {
               disabled={isLoading}
               InputProps={{
                 endAdornment: (
-                  <InputAdornment position='end'>
+                  <InputAdornment position="end">
                     <IconButton
-                      edge='end'
+                      edge="end"
                       onClick={handleClickShowPassword}
                       onMouseDown={(e) => e.preventDefault()}
                       disabled={isLoading}
@@ -146,8 +183,8 @@ const Login = () => {
 
             <Button 
               fullWidth 
-              variant='contained' 
-              type='submit' 
+              variant="contained" 
+              type="submit" 
               disabled={isLoading}
               size="large"
               sx={{ mb: 2 }}
@@ -160,7 +197,7 @@ const Login = () => {
                 Não tem uma conta?{' '}
                 <Button 
                   variant="text" 
-                  onClick={() => router.push('/register')}
+                  onClick={handleRegisterClick}
                   sx={{ textTransform: 'none' }}
                   disabled={isLoading}
                 >
