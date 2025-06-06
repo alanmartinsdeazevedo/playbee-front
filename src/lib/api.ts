@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
 
 class SimpleApiClient {
   private baseUrl: string;
@@ -25,10 +25,14 @@ class SimpleApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     
     const token = this.getAuthToken();
+    
+    // Garantir que options.headers seja do tipo correto
+    const optionsHeaders = options.headers as Record<string, string> | undefined;
+    
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
+      ...(optionsHeaders || {}),
     };
 
     try {

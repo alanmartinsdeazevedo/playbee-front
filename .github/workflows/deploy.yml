@@ -40,15 +40,15 @@ jobs:
     - name: Build Docker image
       run: |
         echo "🔨 Building PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
-        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }} .
-        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_FRONTEND_IMAGE }}:latest .
+        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }} .
+        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_IMAGE_NAME }}:latest .
 
     # Push Docker
     - name: Push Docker image
       run: |
         echo "📤 Pushing PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
-        docker push ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
-        docker push ${{ secrets.DOCKER_FRONTEND_IMAGE }}:latest
+        docker push ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
+        docker push ${{ secrets.DOCKER_IMAGE_NAME }}:latest
 
     - name: Install SSH client
       run: sudo apt-get install -y openssh-client
@@ -72,7 +72,7 @@ jobs:
           docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
 
           # Pull da nova versão
-          docker pull ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
+          docker pull ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
 
           # Backup do container atual
           docker stop playbee-frontend || true
@@ -86,7 +86,7 @@ jobs:
             -e NEXT_PUBLIC_PWA_SHORT_NAME="PlayBee" \
             -e NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
             --restart unless-stopped \
-            ${{ secrets.DOCKER_FRONTEND_IMAGE }}:${{ steps.version.outputs.VERSION }}
+            ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
 
           # Aguardar inicialização
           sleep 10
@@ -119,5 +119,6 @@ jobs:
 
           # Limpeza de imagens antigas
           echo "🧹 Cleaning old frontend images..."
-          docker images ${{ secrets.DOCKER_FRONTEND_IMAGE }} --format "{{.Tag}}" | grep -E "^(v|main-)" | sort -V | head -n -5 | xargs -I {} docker rmi ${{ secrets.DOCKER_FRONTEND_IMAGE }}:{} 2>/dev/null || true
+          docker system prune -a -f --volumes
+          docker images ${{ secrets.DOCKER_IMAGE_NAME }} --format "{{.Tag}}" | grep -E "^(v|main-)" | sort -V | head -n -5 | xargs -I {} docker rmi ${{ secrets.DOCKER_IMAGE_NAME }}:{} 2>/dev/null || true
         '
