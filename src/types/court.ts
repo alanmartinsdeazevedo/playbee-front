@@ -1,18 +1,52 @@
 export interface Court {
   id: string;
-  nome: string;
-  tipo: string;
-  localizacao: string;
+  name: string;
+  description?: string;
+  sport: SportType;
+  location: string;
+  price: number;
+  rating: number;
+  available: boolean;
+  features: string[];
+  images: string[];
+  capacity: number;
+  workingHours: {
+    start: string;
+    end: string;
+  };
+  createdAt: string;
+  updatedAt: string;
 }
 
+export type SportType = 'futebol' | 'basquete' | 'tenis' | 'volei' | 'outros';
+
+// Criar quadra
 export interface CreateCourtRequest {
-  nome: string;
-  tipo: string;
-  localizacao: string;
+  name: string;
+  description?: string;
+  sport: SportType;
+  location: string;
+  price: number;
+  features: string[];
+  capacity: number;
+  workingHours: {
+    start: string;
+    end: string;
+  };
 }
 
+// Atualizar quadra
 export interface UpdateCourtRequest {
-  nome?: string;
-  tipo?: string;
-  localizacao?: string;
+  name?: string;
+  description?: string;
+  sport?: SportType;
+  location?: string;
+  price?: number;
+  features?: string[];
+  capacity?: number;
+  workingHours?: {
+    start: string;
+    end: string;
+  };
+  available?: boolean;
 }

@@ -1,33 +1,40 @@
 import type { User } from "./auth";
 import type { Court } from "./court";
 
-export interface Schedule {
+export interface Reservation {
   id: string;
-  dataHoraInicio: string;
-  dataHoraFim: string;
-  status: string;
-  user_id: string;
-  court_id: string;
+  userId: string;
+  courtId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration: number;
+  totalPrice: number;
+  status: ReservationStatus;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  
   user?: User;
   court?: Court;
 }
 
-export interface CreateScheduleRequest {
-  dataHoraInicio: string;
-  dataHoraFim: string;
-  status: string;
-  user_id: string;
-  court_id: string;
+export type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+
+//Criar Reserva
+export interface CreateReservationRequest {
+  courtId: string;
+  date: string;
+  startTime: string;
+  duration: number;
+  notes?: string;
 }
 
-export interface UpdateScheduleRequest {
-  dataHoraInicio?: string;
-  dataHoraFim?: string;
-  status?: string;
-  user_id?: string;
-  court_id?: string;
+// Atualizar Reserva
+export interface UpdateReservationRequest {
+  date?: string;
+  startTime?: string;
+  duration?: number;
+  notes?: string;
+  status?: ReservationStatus;
 }
-
-export type Reservation = Schedule;
-export type CreateReservationRequest = CreateScheduleRequest;
-export type UpdateReservationRequest = UpdateScheduleRequest;

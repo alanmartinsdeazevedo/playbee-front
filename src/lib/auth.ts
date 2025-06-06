@@ -5,14 +5,12 @@ export class AuthService {
   private static readonly TOKEN_KEY = 'auth-token';
   private static readonly USER_KEY = 'user-data';
 
-  // Salvar token nos cookies
   static setToken(token: string): void {
     if (typeof window === 'undefined') return;
     
     document.cookie = `${this.TOKEN_KEY}=${token}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax; ${process.env.NODE_ENV === 'production' ? 'secure;' : ''}`;
   }
 
-  // Obter token dos cookies
   static getToken(): string | null {
     if (typeof window === 'undefined') return null;
     
@@ -24,14 +22,12 @@ export class AuthService {
     return authCookie ? authCookie.split('=')[1] : null;
   }
 
-  // Salvar dados do usuário no localStorage
   static setUser(user: User): void {
     if (typeof window === 'undefined') return;
     
     localStorage.setItem(this.USER_KEY, JSON.stringify(user));
   }
 
-  // Obter dados do usuário do localStorage
   static getUser(): User | null {
     if (typeof window === 'undefined') return null;
     
@@ -44,28 +40,23 @@ export class AuthService {
     }
   }
 
-  // Remover autenticação (logout)
   static removeAuth(): void {
     if (typeof window === 'undefined') return;
     
-    // Remover cookie
     document.cookie = `${this.TOKEN_KEY}=; path=/; max-age=0`;
     
-    // Remover dados do localStorage
     localStorage.removeItem(this.USER_KEY);
   }
 
-  // Verificar se está autenticado
   static isAuthenticated(): boolean {
     return !!this.getUser() && !!this.getToken();
   }
 
-  // Login - ATUALIZADO para usar a nova rota
+  // Login
   static async login(email: string, senha: string): Promise<User> {
     try {
       console.log('Fazendo login para:', email);
       
-      // Chamada para a nova rota do backend
       const response = await api.post<{
         message: string;
         user: User;
@@ -74,7 +65,6 @@ export class AuthService {
 
       console.log('Resposta do login:', response);
 
-      // Salvar autenticação
       this.setToken(response.token);
       this.setUser(response.user);
       
@@ -84,7 +74,7 @@ export class AuthService {
     } catch (error) {
       console.error('Erro no login:', error);
       
-      // Tratar diferentes tipos de erro
+      // Tratar erros
       if (error instanceof Error) {
         if (error.message.includes('Email ou senha incorretos')) {
           throw new Error('Email ou senha incorretos');
@@ -109,7 +99,7 @@ export class AuthService {
     }
   }
 
-  // Registro de novo usuário - ATUALIZADO
+  // Registro novo usuário
   static async register(userData: {
     nome: string;
     email: string;
@@ -130,7 +120,7 @@ export class AuthService {
       
       console.log('Usuário criado com sucesso:', newUser.nome);
       
-      // Fazer login automático após registro
+      // Login automático
       const loginResponse = await this.login(userData.email, userData.senha);
       
       return loginResponse;
@@ -158,29 +148,23 @@ export class AuthService {
     }
   }
 
-  // Logout - ATUALIZADO
-  static async logout(): Promise<void> {
-    try {
-      console.log('Fazendo logout...');
+  // Logout
+  static logout(): void {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.TOKEN_KEY);
+      localStorage.removeItem(this.USER_KEY);
       
-      // Chamar endpoint de logout (opcional)
-      await api.post('/auth/logout');
+      const userAgent = navigator.userAgent;
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || window.innerWidth <= 768;
       
-    } catch (error) {
-      console.warn('Erro ao notificar logout no servidor:', error);
-      // Continuar com logout local mesmo se servidor falhar
-    } finally {
-      // Sempre limpar dados locais
-      this.removeAuth();
-      
-      // Redirecionar para login
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+      if (isMobile) {
+        window.location.href = '/mobile/login';
+      } else {
+        window.location.href = '/desktop/login';
       }
     }
   }
 
-  // Resto dos métodos permanecem iguais...
   static isTokenValid(): boolean {
     const token = this.getToken();
     
@@ -190,7 +174,6 @@ export class AuthService {
       const parts = token.split('.');
       if (parts.length !== 3) return false;
 
-      // TODO: Validar JWT adequadamente quando necessário
       return true;
 
     } catch (error) {
@@ -245,16 +228,5 @@ export class AuthService {
       isAuthenticated: this.isAuthenticated(),
       isTokenValid: this.isTokenValid(),
     };
-  }
-
-  static debugAuth(): void {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('=== AUTH DEBUG ===');
-      console.log('User:', this.getUser());
-      console.log('Token:', this.getToken());
-      console.log('Is Authenticated:', this.isAuthenticated());
-      console.log('Is Token Valid:', this.isTokenValid());
-      console.log('==================');
-    }
   }
 }

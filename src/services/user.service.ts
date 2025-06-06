@@ -1,59 +1,175 @@
 import { api } from '@/lib/api';
 import type { User } from '@/types/auth';
 
-export interface CreateUserRequest {
-  nome: string;
-  email: string;
-  senha: string;
-  telefone: string;
-  role: string;
-}
-
 export interface UpdateUserRequest {
   nome?: string;
   email?: string;
-  senha?: string;
   telefone?: string;
-  role?: string;
+}
+
+export interface ChangePasswordRequest {
+  senhaAtual: string;
+  novaSenha: string;
+}
+
+export interface UserStats {
+  totalReservations: number;
+  totalHoursPlayed: number;
+  favoritesSport: string;
+  totalSpent: number;
+  memberSince: string;
 }
 
 export class UserService {
+  /**
+   * Buscar todos os usuários (admin apenas)
+   */
   static async getAll(): Promise<User[]> {
     try {
-      const response = await api.get<{ users: User[] }>('/users');
-      return response.users;
+      return await api.get<User[]>('/users');
     } catch (error) {
-      console.error('Erro ao buscar usuários:', error);
-      throw new Error('Erro ao carregar usuários');
+      console.error('Erro no UserService.getAll:', error);
+      throw error;
     }
   }
 
-  static async create(userData: CreateUserRequest): Promise<User> {
+  /**
+   * Buscar usuário por ID
+   */
+  static async getById(id: string): Promise<User> {
     try {
-      const user = await api.post<User>('/users', userData);
+      return await api.get<User>(`/users/${id}`);
+    } catch (error) {
+      console.error('Erro no UserService.getById:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Buscar perfil do usuário logado
+   */
+  static async getProfile(): Promise<User> {
+    try {
+      const user = await api.get<User>('/users/profile');
+      
+      // Atualizar dados locais
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('playbee_user', JSON.stringify(user));
+      }
+
       return user;
     } catch (error) {
-      console.error('Erro ao criar usuário:', error);
-      throw new Error('Erro ao criar usuário');
+      console.error('Erro no UserService.getProfile:', error);
+      throw error;
     }
   }
 
-  static async update(id: string, userData: UpdateUserRequest): Promise<User> {
+  /**
+   * Atualizar dados do usuário
+   */
+  static async update(data: UpdateUserRequest): Promise<User> {
     try {
-      const response = await api.put<{ user: User }>(`/users/${id}`, userData);
-      return response.user;
+      const user = await api.put<User>('/users/profile', data);
+      
+      // Atualizar dados locais
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('playbee_user', JSON.stringify(user));
+      }
+
+      return user;
     } catch (error) {
-      console.error('Erro ao atualizar usuário:', error);
-      throw new Error('Erro ao atualizar usuário');
+      console.error('Erro no UserService.update:', error);
+      throw error;
     }
   }
 
-  static async delete(id: string): Promise<void> {
+  /**
+   * Alterar senha do usuário
+   */
+  static async changePassword(data: ChangePasswordRequest): Promise<void> {
     try {
-      await api.delete<void>(`/users/${id}`);
+      await api.put<void>('/users/change-password', data);
     } catch (error) {
-      console.error('Erro ao deletar usuário:', error);
-      throw new Error('Erro ao deletar usuário');
+      console.error('Erro no UserService.changePassword:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Buscar estatísticas do usuário
+   */
+  static async getStats(): Promise<UserStats> {
+    try {
+      return await api.get<UserStats>('/users/stats');
+    } catch (error) {
+      console.error('Erro no UserService.getStats:', error);
+      // Retornar dados mock em caso de erro
+      return {
+        totalReservations: 0,
+        totalHoursPlayed: 0,
+        favoritesSport: 'Futebol',
+        totalSpent: 0,
+        memberSince: new Date().toISOString(),
+      };
+    }
+  }
+
+  /**
+   * Deletar conta do usuário
+   */
+  static async deleteAccount(): Promise<void> {
+    try {
+      await api.delete<void>('/users/profile');
+      // O logout já é feito automaticamente no api.ts se houver erro 401
+    } catch (error) {
+      console.error('Erro no UserService.deleteAccount:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Buscar usuários com filtros (admin)
+   */
+  static async search(query: string, limit: number = 20): Promise<User[]> {
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        limit: limit.toString(),
+      });
+
+      return await api.get<User[]>(`/users/search?${params}`);
+    } catch (error) {
+      console.error('Erro no UserService.search:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verificar se usuário tem permissão de admin
+   */
+  static async checkPermissions(): Promise<{ isAdmin: boolean; permissions: string[] }> {
+    try {
+      return await api.get<{ isAdmin: boolean; permissions: string[] }>('/users/permissions');
+    } catch (error) {
+      console.error('Erro no UserService.checkPermissions:', error);
+      return { isAdmin: false, permissions: [] };
+    }
+  }
+
+  /**
+   * Atualizar preferências do usuário
+   */
+  static async updatePreferences(preferences: {
+    notifications?: boolean;
+    darkMode?: boolean;
+    language?: string;
+    emailNotifications?: boolean;
+  }): Promise<void> {
+    try {
+      await api.put<void>('/users/preferences', preferences);
+    } catch (error) {
+      console.error('Erro no UserService.updatePreferences:', error);
+      throw error;
     }
   }
 }
