@@ -9,35 +9,35 @@ export function middleware(request: NextRequest) {
   
   if (pathname === '/') {
     if (isMobile) {
-      return NextResponse.redirect(new URL('/m/login', request.url));
+      return NextResponse.redirect(new URL('/mobile/login', request.url));
     } else {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/desktop/login', request.url));
     }
   }
 
   if (isMobile && pathname.startsWith('/desktop')) {
-    const mobilePath = pathname.replace('/', '/m');
+    const mobilePath = pathname.replace('/desktop', '/mobile');
     return NextResponse.redirect(new URL(mobilePath, request.url));
   }
 
-  if (!isMobile && pathname.startsWith('/m')) {
-    const desktopPath = pathname.replace('/m', '/');
+  if (!isMobile && pathname.startsWith('/mobile')) {
+    const desktopPath = pathname.replace('/mobile', '/desktop');
     return NextResponse.redirect(new URL(desktopPath, request.url));
   }
 
   if (pathname === '/login') {
     if (isMobile) {
-      return NextResponse.redirect(new URL('/m/login', request.url));
+      return NextResponse.redirect(new URL('/mobile/login', request.url));
     } else {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/desktop/login', request.url));
     }
   }
 
   if (pathname === '/dashboard') {
     if (isMobile) {
-      return NextResponse.redirect(new URL('/m/dashboard', request.url));
+      return NextResponse.redirect(new URL('/mobile/dashboard', request.url));
     } else {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return NextResponse.redirect(new URL('/desktop/dashboard', request.url));
     }
   }
 
