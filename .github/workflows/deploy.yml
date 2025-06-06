@@ -40,8 +40,8 @@ jobs:
     - name: Build Docker image
       run: |
         echo "🔨 Building PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
-        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }} .
-        docker build -f Dockerfile.frontend -t ${{ secrets.DOCKER_IMAGE_NAME }}:latest .
+        docker build -f Dockerfile -t ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }} .
+        docker build -f Dockerfile -t ${{ secrets.DOCKER_IMAGE_NAME }}:latest .
 
     # Push Docker
     - name: Push Docker image
