@@ -21,6 +21,7 @@ import {
   Select,
   FormHelperText,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -29,17 +30,13 @@ import {
   Sports as SportsIcon,
   Save as SaveIcon,
   Schedule as ScheduleIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
-import { useRouter, useSearchParams } from 'next/navigation';
-
-interface Court {
-  id: number;
-  name: string;
-  sport: string;
-  location: string;
-  available: boolean;
-  image: string;
-}
+import { useRouter, useSearchParams, useParams } from 'next/navigation';
+import { useCourts } from '@/hooks/useCourts';
+import { useReservations, useReservation } from '@/hooks/useReservations';
+import type { CreateScheduleRequest, UpdateScheduleRequest } from '@/types/reservation';
 
 interface User {
   id: number;
@@ -54,13 +51,25 @@ interface ReservationForm {
   startTime: string;
   endTime: string;
   duration: number;
+  status: string;
   notes: string;
 }
 
-export const DesktopNewReservationView = () => {
+interface Props {
+  mode?: 'create' | 'edit';
+}
+
+export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
   const router = useRouter();
+  const params = useParams();
   const searchParams = useSearchParams();
+  
   const preSelectedCourtId = searchParams.get('courtId');
+  const reservationId = mode === 'edit' ? (params.id as string) : null;
+
+  const { courts } = useCourts();
+  const { createReservation, updateReservation, error: crudError, clearError } = useReservations();
+  const { reservation, isLoading: isLoadingReservation, error: loadError } = useReservation(reservationId || '');
 
   const [form, setForm] = useState<ReservationForm>({
     courtId: preSelectedCourtId || '',
@@ -69,48 +78,17 @@ export const DesktopNewReservationView = () => {
     startTime: '',
     endTime: '',
     duration: 0,
+    status: 'agendado',
     notes: '',
   });
 
   const [errors, setErrors] = useState<Partial<ReservationForm>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock data
-  const courts: Court[] = [
-    {
-      id: 1,
-      name: 'Quadra Central',
-      sport: 'Futebol',
-      location: 'Centro',
-      available: true,
-      image: '🏟️'
-    },
-    {
-      id: 2,
-      name: 'Arena Basketball',
-      sport: 'Basquete',
-      location: 'Zona Norte',
-      available: true,
-      image: '🏀'
-    },
-    {
-      id: 3,
-      name: 'Court Tennis Pro',
-      sport: 'Tênis',
-      location: 'Zona Sul',
-      available: false,
-      image: '🎾'
-    },
-    {
-      id: 4,
-      name: 'Vôlei Beach',
-      sport: 'Vôlei',
-      location: 'Praia',
-      available: true,
-      image: '🏐'
-    },
-  ];
+  const isEditMode = mode === 'edit';
+  const isLoading = isEditMode ? isLoadingReservation : false;
 
+  // Mock data para usuários - em produção viria de um hook useUsers()
   const users: User[] = [
     { id: 1, name: 'João Silva', email: 'joao@email.com' },
     { id: 2, name: 'Maria Santos', email: 'maria@email.com' },
@@ -118,8 +96,40 @@ export const DesktopNewReservationView = () => {
     { id: 4, name: 'Ana Lima', email: 'ana@email.com' },
   ];
 
-  const availableCourts = courts.filter(court => court.available);
-  const selectedCourt = courts.find(court => court.id.toString() === form.courtId);
+  const statusOptions = [
+    { value: 'agendado', label: 'Agendado', color: 'primary' },
+    { value: 'confirmado', label: 'Confirmado', color: 'success' },
+    { value: 'cancelado', label: 'Cancelado', color: 'error' },
+    { value: 'concluido', label: 'Concluído', color: 'info' },
+  ];
+
+  const availableCourts = courts.filter(court => {
+    // Simular disponibilidade - em produção viria da API
+    return Math.random() > 0.2; // 80% disponíveis
+  });
+
+  const selectedCourt = courts.find(court => court.id === form.courtId);
+  const selectedUser = users.find(user => user.id.toString() === form.userId);
+  const selectedStatus = statusOptions.find(status => status.value === form.status);
+
+  // Carregar dados da reserva no formulário (modo edição)
+  useEffect(() => {
+    if (isEditMode && reservation) {
+      const startDate = new Date(reservation.dataHoraInicio);
+      const endDate = new Date(reservation.dataHoraFim);
+
+      setForm({
+        courtId: reservation.courtId,
+        userId: reservation.userId,
+        date: startDate.toISOString().split('T')[0],
+        startTime: startDate.toTimeString().slice(0, 5),
+        endTime: endDate.toTimeString().slice(0, 5),
+        duration: (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60),
+        status: reservation.status,
+        notes: '',
+      });
+    }
+  }, [isEditMode, reservation]);
 
   // Calculate duration when start/end time changes
   useEffect(() => {
@@ -144,6 +154,11 @@ export const DesktopNewReservationView = () => {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
+    
+    // Clear API error
+    if (crudError) {
+      clearError();
+    }
   };
 
   const validateForm = (): boolean => {
@@ -154,6 +169,7 @@ export const DesktopNewReservationView = () => {
     if (!form.date) newErrors.date = 'Selecione uma data';
     if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
     if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
+    if (isEditMode && !form.status) newErrors.status = 'Selecione um status';
 
     if (form.date && new Date(form.date) < new Date()) {
       newErrors.date = 'Data não pode ser no passado';
@@ -186,22 +202,78 @@ export const DesktopNewReservationView = () => {
     setIsSubmitting(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      console.log('Nova reserva:', {
-        ...form,
-        status: 'upcoming',
-        createdAt: new Date().toISOString(),
-      });
+      const startDateTime = new Date(`${form.date}T${form.startTime}`);
+      const endDateTime = new Date(`${form.date}T${form.endTime}`);
 
-      // Redirect to reservations list
-      router.push('/desktop/reservations?created=true');
+      if (isEditMode && reservationId) {
+        // Modo edição
+        const updateData: UpdateScheduleRequest = {
+          dataHoraInicio: startDateTime.toISOString(),
+          dataHoraFim: endDateTime.toISOString(),
+          status: form.status,
+          userId: form.userId,
+          courtId: form.courtId,
+        };
+
+        const success = await updateReservation(reservationId, updateData);
+        
+        if (success) {
+          router.push(`/desktop/reservations/${reservationId}?updated=true`);
+        }
+      } else {
+        // Modo criação
+        const reservationData: CreateScheduleRequest = {
+          dataHoraInicio: startDateTime,
+          dataHoraFim: endDateTime,
+          status: 'agendado',
+          userId: form.userId,
+          courtId: form.courtId,
+        };
+
+        const newReservation = await createReservation(reservationData);
+        
+        if (newReservation) {
+          router.push('/desktop/reservations?created=true');
+        }
+      }
     } catch (error) {
-      console.error('Erro ao criar reserva:', error);
+      console.error(`Erro ao ${isEditMode ? 'atualizar' : 'criar'} reserva:`, error);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleReset = () => {
+    if (isEditMode && reservation) {
+      // Modo edição: voltar aos valores originais
+      const startDate = new Date(reservation.dataHoraInicio);
+      const endDate = new Date(reservation.dataHoraFim);
+
+      setForm({
+        courtId: reservation.courtId,
+        userId: reservation.userId,
+        date: startDate.toISOString().split('T')[0],
+        startTime: startDate.toTimeString().slice(0, 5),
+        endTime: endDate.toTimeString().slice(0, 5),
+        duration: (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60),
+        status: reservation.status,
+        notes: '',
+      });
+    } else {
+      // Modo criação: limpar formulário
+      setForm({
+        courtId: preSelectedCourtId || '',
+        userId: '',
+        date: '',
+        startTime: '',
+        endTime: '',
+        duration: 0,
+        status: 'agendado',
+        notes: '',
+      });
+    }
+    setErrors({});
+    clearError();
   };
 
   // Generate time options (7:00 to 22:00, every 30 minutes)
@@ -217,6 +289,52 @@ export const DesktopNewReservationView = () => {
   // Get minimum date (today)
   const today = new Date().toISOString().split('T')[0];
 
+  const getSportEmoji = (tipo: string): string => {
+    const lowerTipo = tipo.toLowerCase();
+    if (lowerTipo.includes('futebol') || lowerTipo.includes('futsal')) return '⚽';
+    if (lowerTipo.includes('basquete') || lowerTipo.includes('basketball')) return '🏀';
+    if (lowerTipo.includes('tênis') || lowerTipo.includes('tennis')) return '🎾';
+    if (lowerTipo.includes('vôlei') || lowerTipo.includes('volei') || lowerTipo.includes('volleyball')) return '🏐';
+    return '🏟️';
+  };
+
+  // Loading skeleton para modo edição
+  if (isLoading) {
+    return (
+      <Container maxWidth="lg">
+        <Box display="flex" alignItems="center" gap={2} mb={4}>
+          <Button variant="outlined" disabled>
+            <ArrowBackIcon />
+          </Button>
+          <Box>
+            <Typography variant="h4" component="h1" gutterBottom>
+              {isEditMode ? 'Editar Reserva' : 'Nova Reserva'}
+            </Typography>
+          </Box>
+        </Box>
+        <CircularProgress />
+      </Container>
+    );
+  }
+
+  // Erro ao carregar reserva (modo edição)
+  if (isEditMode && loadError) {
+    return (
+      <Container maxWidth="lg">
+        <Alert severity="error" sx={{ mt: 4 }}>
+          Erro ao carregar dados da reserva: {loadError}
+        </Alert>
+        <Button 
+          startIcon={<ArrowBackIcon />}
+          onClick={() => router.back()}
+          sx={{ mt: 2 }}
+        >
+          Voltar
+        </Button>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="lg">
       {/* Header */}
@@ -230,22 +348,36 @@ export const DesktopNewReservationView = () => {
         </Button>
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
-            Nova Reserva
+            {isEditMode ? 'Editar Reserva' : 'Nova Reserva'}
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Agende o uso de uma quadra esportiva
+            {isEditMode 
+              ? 'Atualize as informações da reserva'
+              : 'Agende o uso de uma quadra esportiva'
+            }
           </Typography>
         </Box>
       </Box>
 
+      {/* API Error */}
+      {crudError && (
+        <Alert 
+          severity="error" 
+          sx={{ mb: 3 }}
+          onClose={clearError}
+        >
+          {crudError}
+        </Alert>
+      )}
+
       <Grid container spacing={4}>
         {/* Form */}
-        <Grid size={{ xs: 12, md: 8 }}>
+        <Grid size= {{ xs:12, md:8 }}>
           <Card>
             <CardContent sx={{ p: 4 }}>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <ScheduleIcon color="primary" />
-                Dados da Reserva
+                {isEditMode ? <EditIcon color="primary" /> : <ScheduleIcon color="primary" />}
+                {isEditMode ? 'Editar Dados da Reserva' : 'Dados da Reserva'}
               </Typography>
 
               <Stack spacing={3} sx={{ mt: 3 }}>
@@ -258,13 +390,13 @@ export const DesktopNewReservationView = () => {
                     label="Quadra *"
                   >
                     {availableCourts.map((court) => (
-                      <MenuItem key={court.id} value={court.id.toString()}>
+                      <MenuItem key={court.id} value={court.id}>
                         <Box display="flex" alignItems="center" gap={2}>
-                          <span style={{ fontSize: '1.2rem' }}>{court.image}</span>
+                          <span style={{ fontSize: '1.2rem' }}>{getSportEmoji(court.tipo)}</span>
                           <Box>
-                            <Typography variant="body1">{court.name}</Typography>
+                            <Typography variant="body1">{court.nome}</Typography>
                             <Typography variant="caption" color="text.secondary">
-                              {court.sport} • {court.location}
+                              {court.tipo} • {court.localizacao}
                             </Typography>
                           </Box>
                         </Box>
@@ -344,6 +476,31 @@ export const DesktopNewReservationView = () => {
                   </FormControl>
                 </Stack>
 
+                {/* Status (apenas no modo edição) */}
+                {isEditMode && (
+                  <FormControl fullWidth error={!!errors.status}>
+                    <InputLabel>Status *</InputLabel>
+                    <Select
+                      value={form.status}
+                      onChange={(e) => handleInputChange('status', e.target.value)}
+                      label="Status *"
+                    >
+                      {statusOptions.map((status) => (
+                        <MenuItem key={status.value} value={status.value}>
+                          <Box display="flex" alignItems="center" gap={2}>
+                            <Chip 
+                              label={status.label}
+                              color={status.color as any}
+                              size="small"
+                            />
+                          </Box>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.status && <FormHelperText>{errors.status}</FormHelperText>}
+                  </FormControl>
+                )}
+
                 {/* Duration Display */}
                 {form.duration > 0 && (
                   <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -370,6 +527,13 @@ export const DesktopNewReservationView = () => {
                 <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4 }}>
                   <Button
                     variant="outlined"
+                    onClick={handleReset}
+                    disabled={isSubmitting}
+                  >
+                    {isEditMode ? 'Resetar' : 'Limpar'}
+                  </Button>
+                  <Button
+                    variant="outlined"
                     onClick={() => router.back()}
                     disabled={isSubmitting}
                   >
@@ -377,12 +541,15 @@ export const DesktopNewReservationView = () => {
                   </Button>
                   <Button
                     variant="contained"
-                    startIcon={<SaveIcon />}
+                    startIcon={isEditMode ? <SaveIcon /> : <AddIcon />}
                     onClick={handleSubmit}
                     disabled={isSubmitting}
                     size="large"
                   >
-                    {isSubmitting ? 'Criando Reserva...' : 'Criar Reserva'}
+                    {isSubmitting 
+                      ? (isEditMode ? 'Salvando...' : 'Criando...') 
+                      : (isEditMode ? 'Salvar Alterações' : 'Criar Reserva')
+                    }
                   </Button>
                 </Stack>
               </Stack>
@@ -391,7 +558,7 @@ export const DesktopNewReservationView = () => {
         </Grid>
 
         {/* Summary Sidebar */}
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size= {{ xs:12, md:4 }}>
           <Stack spacing={3}>
             {/* Selected Court Info */}
             {selectedCourt && (
@@ -403,16 +570,40 @@ export const DesktopNewReservationView = () => {
                   </Typography>
                   <Box display="flex" alignItems="center" gap={2} mt={2}>
                     <Avatar sx={{ bgcolor: 'primary.main', fontSize: '1.5rem' }}>
-                      {selectedCourt.image}
+                      {getSportEmoji(selectedCourt.tipo)}
                     </Avatar>
                     <Box>
                       <Typography variant="subtitle1" fontWeight="bold">
-                        {selectedCourt.name}
+                        {selectedCourt.nome}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        {selectedCourt.sport} • {selectedCourt.location}
+                        {selectedCourt.tipo} • {selectedCourt.localizacao}
                       </Typography>
                       <Chip label="Disponível" color="success" size="small" sx={{ mt: 0.5 }} />
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Selected User Info */}
+            {selectedUser && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Usuário Selecionado
+                  </Typography>
+                  <Box display="flex" alignItems="center" gap={2} mt={2}>
+                    <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                      {selectedUser.name.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {selectedUser.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {selectedUser.email}
+                      </Typography>
                     </Box>
                   </Box>
                 </CardContent>
@@ -424,7 +615,7 @@ export const DesktopNewReservationView = () => {
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CalendarIcon color="primary" />
-                  Resumo da Reserva
+                  {isEditMode ? 'Dados Atuais' : 'Resumo da Reserva'}
                 </Typography>
                 
                 <Stack spacing={2} sx={{ mt: 2 }}>
@@ -463,27 +654,129 @@ export const DesktopNewReservationView = () => {
                     </Typography>
                   </Box>
 
-                  <Divider />
-                  
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Status
-                    </Typography>
-                    <Chip 
-                      label="Agendada" 
-                      color="primary" 
-                      size="small" 
-                      sx={{ mt: 0.5 }}
-                    />
-                  </Box>
+                  {isEditMode && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Status
+                      </Typography>
+                      <Box mt={0.5}>
+                        {selectedStatus ? (
+                          <Chip 
+                            label={selectedStatus.label}
+                            color={selectedStatus.color as any}
+                            size="small"
+                          />
+                        ) : (
+                          <Typography variant="body1">Não selecionado</Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {!isEditMode && (
+                    <>
+                      <Divider />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Status
+                        </Typography>
+                        <Chip 
+                          label="Agendada" 
+                          color="primary" 
+                          size="small" 
+                          sx={{ mt: 0.5 }}
+                        />
+                      </Box>
+                    </>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
 
+            {/* Pricing Info (apenas no modo criação) */}
+            {!isEditMode && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Informações de Preço
+                  </Typography>
+                  <Stack spacing={1}>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">
+                        Valor por hora:
+                      </Typography>
+                      <Typography variant="body2" fontWeight="bold">
+                        R$ 80,00
+                      </Typography>
+                    </Box>
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="body2" color="text.secondary">
+                        Duração:
+                      </Typography>
+                      <Typography variant="body2">
+                        {form.duration}h
+                      </Typography>
+                    </Box>
+                    <Divider />
+                    <Box display="flex" justifyContent="space-between">
+                      <Typography variant="h6" color="primary.main">
+                        Total:
+                      </Typography>
+                      <Typography variant="h6" color="primary.main" fontWeight="bold">
+                        R$ {(form.duration * 80).toFixed(2)}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Original Data (apenas no modo edição) */}
+            {isEditMode && reservation && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Dados Originais
+                  </Typography>
+                  <Stack spacing={1}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Data Original
+                      </Typography>
+                      <Typography variant="body2">
+                        {new Date(reservation.dataHoraInicio).toLocaleDateString('pt-BR')}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Horário Original
+                      </Typography>
+                      <Typography variant="body2">
+                        {new Date(reservation.dataHoraInicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - 
+                        {new Date(reservation.dataHoraFim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Status Original
+                      </Typography>
+                      <Typography variant="body2">
+                        {reservation.status}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Info */}
-            <Alert severity="info">
+            <Alert severity={isEditMode ? "warning" : "info"}>
               <Typography variant="body2">
-                <strong>Lembre-se:</strong> As reservas são gratuitas e podem ser canceladas até 2 horas antes do horário agendado.
+                <strong>{isEditMode ? 'Atenção:' : 'Lembre-se:'}</strong>{' '}
+                {isEditMode 
+                  ? 'As alterações afetarão a reserva permanentemente. Verifique todos os dados antes de salvar.'
+                  : 'As reservas podem ser canceladas até 2 horas antes do horário agendado sem cobrança.'
+                }
               </Typography>
             </Alert>
           </Stack>

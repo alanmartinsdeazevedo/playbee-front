@@ -1,31 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ReservationsService } from '@/services/reservations.service';
-import type { Schedule, CreateScheduleRequest, UpdateScheduleRequest } from '@/types/reservation';
-
-export interface CreateReservationRequest {
-  dataHoraInicio: Date;
-  dataHoraFim: Date;
-  status: string;
-  userId: string;
-  courtId: string;
-}
-
-export interface UpdateReservationRequest {
-  dataHoraInicio?: string;
-  dataHoraFim?: string;
-  status?: string;
-  userId?: string;
-  courtId?: string;
-}
+import type { 
+  Schedule, 
+  CreateScheduleRequest, 
+  UpdateScheduleRequest, 
+  ReservationFilter 
+} from '@/types/reservation';
 
 interface UseReservationsResult {
   reservations: Schedule[];
   isLoading: boolean;
   error: string;
   refreshReservations: () => Promise<void>;
-  createReservation: (data: CreateReservationRequest) => Promise<Schedule | null>;
-  updateReservation: (id: string, data: UpdateReservationRequest) => Promise<Schedule | null>;
+  createReservation: (data: CreateScheduleRequest) => Promise<Schedule | null>;
+  updateReservation: (id: string, data: UpdateScheduleRequest) => Promise<Schedule | null>;
   deleteReservation: (id: string) => Promise<boolean>;
+  searchReservations: (filters: ReservationFilter) => Promise<Schedule[]>;
   clearError: () => void;
 }
 
@@ -40,33 +30,19 @@ export const useReservations = (): UseReservationsResult => {
       setIsLoading(true);
       setError('');
       
-      console.log('🔍 Hook: Carregando reservas...');
       const data = await ReservationsService.getAll();
-      
-      if (Array.isArray(data)) {
-        setReservations(data);
-        console.log('✅ Hook: Reservas carregadas:', data.length);
-      } else {
-        console.warn('⚠️ Hook: Formato de resposta inesperado:', data);
-        setReservations([]);
-      }
+      setReservations(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar reservas';
       setError(errorMessage);
-      console.error('❌ Hook: Erro ao carregar reservas:', err);
-      
-      // Se o endpoint não existe ainda, começar com lista vazia
-      if (err instanceof Error && err.message.includes('not found')) {
-        setReservations([]);
-        setError('');
-      }
+      console.error('Erro ao carregar reservas:', err);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   // Criar nova reserva
-  const createReservation = useCallback(async (data: CreateReservationRequest): Promise<Schedule | null> => {
+  const createReservation = useCallback(async (data: CreateScheduleRequest): Promise<Schedule | null> => {
     try {
       setError('');
       
@@ -77,7 +53,7 @@ export const useReservations = (): UseReservationsResult => {
         return null;
       }
 
-      // Verificar conflito de horários
+      // Verificar conflitos de horário
       const hasConflict = await ReservationsService.checkConflict(
         data.courtId,
         data.dataHoraInicio,
@@ -85,28 +61,26 @@ export const useReservations = (): UseReservationsResult => {
       );
 
       if (hasConflict) {
-        setError('Conflito de horário: já existe uma reserva neste período');
+        setError('Já existe uma reserva para este horário');
         return null;
       }
 
-      console.log('🔍 Hook: Criando reserva...');
       const newReservation = await ReservationsService.create(data);
       
       // Atualizar lista local
       setReservations(prev => [...prev, newReservation]);
       
-      console.log('✅ Hook: Reserva criada:', newReservation.id);
       return newReservation;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao criar reserva';
       setError(errorMessage);
-      console.error('❌ Hook: Erro ao criar reserva:', err);
+      console.error('Erro ao criar reserva:', err);
       return null;
     }
   }, []);
 
   // Atualizar reserva
-  const updateReservation = useCallback(async (id: string, data: UpdateReservationRequest): Promise<Schedule | null> => {
+  const updateReservation = useCallback(async (id: string, data: UpdateScheduleRequest): Promise<Schedule | null> => {
     try {
       setError('');
       
@@ -117,25 +91,21 @@ export const useReservations = (): UseReservationsResult => {
         return null;
       }
 
-      // Verificar conflito de horários se mudou data/hora
-      if (data.dataHoraInicio && data.dataHoraFim) {
-        const currentReservation = reservations.find(r => r.id === id);
-        if (currentReservation) {
-          const hasConflict = await ReservationsService.checkConflict(
-            currentReservation.courtId,
-            new Date(data.dataHoraInicio),
-            new Date(data.dataHoraFim),
-            id // excluir própria reserva da verificação
-          );
+      // Verificar conflitos se houver mudança de horário
+      if (data.dataHoraInicio && data.dataHoraFim && data.courtId) {
+        const hasConflict = await ReservationsService.checkConflict(
+          data.courtId,
+          new Date(data.dataHoraInicio),
+          new Date(data.dataHoraFim),
+          id // Excluir própria reserva da verificação
+        );
 
-          if (hasConflict) {
-            setError('Conflito de horário: já existe uma reserva neste período');
-            return null;
-          }
+        if (hasConflict) {
+          setError('Já existe uma reserva para este horário');
+          return null;
         }
       }
 
-      console.log('🔍 Hook: Atualizando reserva:', id);
       const updatedReservation = await ReservationsService.update(id, data);
       
       // Atualizar lista local
@@ -143,15 +113,14 @@ export const useReservations = (): UseReservationsResult => {
         prev.map(reservation => reservation.id === id ? updatedReservation : reservation)
       );
       
-      console.log('✅ Hook: Reserva atualizada:', updatedReservation.id);
       return updatedReservation;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao atualizar reserva';
       setError(errorMessage);
-      console.error('❌ Hook: Erro ao atualizar reserva:', err);
+      console.error('Erro ao atualizar reserva:', err);
       return null;
     }
-  }, [reservations]);
+  }, []);
 
   // Deletar reserva
   const deleteReservation = useCallback(async (id: string): Promise<boolean> => {
@@ -176,6 +145,21 @@ export const useReservations = (): UseReservationsResult => {
     }
   }, []);
 
+  // Buscar reservas com filtros
+  const searchReservations = useCallback(async (filters: ReservationFilter): Promise<Schedule[]> => {
+    try {
+      setError('');
+      
+      const results = await ReservationsService.search(filters);
+      return results;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao buscar reservas';
+      setError(errorMessage);
+      console.error('Erro ao buscar reservas:', err);
+      return [];
+    }
+  }, []);
+
   // Limpar erro
   const clearError = useCallback(() => {
     setError('');
@@ -194,6 +178,7 @@ export const useReservations = (): UseReservationsResult => {
     createReservation,
     updateReservation,
     deleteReservation,
+    searchReservations,
     clearError,
   };
 };
@@ -201,40 +186,30 @@ export const useReservations = (): UseReservationsResult => {
 // Hook para buscar uma reserva específica
 export const useReservation = (id: string) => {
   const [reservation, setReservation] = useState<Schedule | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
   const refreshReservation = useCallback(async () => {
-    if (!id) {
-      setIsLoading(false);
-      return;
-    }
+    if (!id) return;
 
     try {
       setIsLoading(true);
       setError('');
       
-      console.log('🔍 useReservation: Carregando reserva com ID:', id);
-      
       const data = await ReservationsService.getById(id);
       setReservation(data);
-      
-      console.log('✅ useReservation: Reserva carregada:', data.id);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar reserva';
       setError(errorMessage);
-      console.error('❌ useReservation: Erro ao carregar reserva:', err);
+      console.error('Erro ao carregar reserva:', err);
     } finally {
       setIsLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    if (id) {
-      console.log('🔍 useReservation: useEffect disparado para ID:', id);
-      refreshReservation();
-    }
-  }, [id, refreshReservation]);
+    refreshReservation();
+  }, [refreshReservation]);
 
   return {
     reservation,
