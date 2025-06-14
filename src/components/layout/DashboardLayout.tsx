@@ -1,4 +1,3 @@
-// src/components/layout/DashboardLayout.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -54,18 +53,14 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  // Evitar problemas de hidratação
   useEffect(() => {
-    setIsMounted(true);
-    
-    // Verificar autenticação após mount
+    // Verificar autenticação e carregar usuário
     const currentUser = AuthService.getUser();
     if (!currentUser) {
       router.push('/desktop/login');
@@ -133,23 +128,9 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     handleMenuClose();
   };
 
-  // Renderizar loading state até a hidratação
-  if (!isMounted) {
-    return (
-      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-        <AppBar position="fixed" sx={{ zIndex: theme.zIndex.drawer + 1 }}>
-          <Toolbar>
-            <Typography variant="h6" noWrap component="div">
-              PlayBee Dashboard
-            </Typography>
-          </Toolbar>
-        </AppBar>
-        <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-          <Toolbar />
-          {children}
-        </Box>
-      </Box>
-    );
+  // Se não há usuário, não renderizar nada (AuthGuard vai redirecionar)
+  if (!user) {
+    return null;
   }
 
   const drawerContent = (
@@ -236,36 +217,34 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             PlayBee Dashboard
           </Typography>
 
-          {user && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography 
-                variant="body2" 
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography 
+              variant="body2" 
+              sx={{ 
+                display: { xs: 'none', sm: 'block' },
+                mr: 1
+              }}
+            >
+              {user.nome}
+            </Typography>
+            <Chip 
+              label={user.role || 'USER'} 
+              size="small" 
+              color={user.role === 'ADMIN' ? 'warning' : 'default'}
+              sx={{ mr: 1, display: { xs: 'none', sm: 'inline-flex' } }}
+            />
+            <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
+              <Avatar 
                 sx={{ 
-                  display: { xs: 'none', sm: 'block' },
-                  mr: 1
+                  bgcolor: 'secondary.main',
+                  width: 36,
+                  height: 36,
                 }}
               >
-                {user.nome}
-              </Typography>
-              <Chip 
-                label={user.role || 'USER'} 
-                size="small" 
-                color={user.role === 'ADMIN' ? 'warning' : 'default'}
-                sx={{ mr: 1, display: { xs: 'none', sm: 'inline-flex' } }}
-              />
-              <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
-                <Avatar 
-                  sx={{ 
-                    bgcolor: 'secondary.main',
-                    width: 36,
-                    height: 36,
-                  }}
-                >
-                  {user.nome?.charAt(0) || 'U'}
-                </Avatar>
-              </IconButton>
-            </Box>
-          )}
+                {user.nome?.charAt(0) || 'U'}
+              </Avatar>
+            </IconButton>
+          </Box>
         </Toolbar>
       </AppBar>
 
