@@ -1,10 +1,19 @@
 import { api } from '@/lib/api';
 import type { User } from '@/types/auth';
 
+export interface CreateUserRequest {
+  nome: string;
+  email: string;
+  senha: string;
+  telefone?: string;
+  role: string;
+}
+
 export interface UpdateUserRequest {
   nome?: string;
   email?: string;
   telefone?: string;
+  role?: string;
 }
 
 export interface ChangePasswordRequest {
@@ -26,9 +35,30 @@ export class UserService {
    */
   static async getAll(): Promise<User[]> {
     try {
-      return await api.get<User[]>('/users');
+      console.log('🔍 Service: Buscando todos os usuários...');
+      
+      const response = await api.get<any>('/users');
+      
+      console.log('🔍 Service: Resposta bruta da API:', response);
+      
+      // Verificar se a resposta tem a estrutura esperada
+      if (response && typeof response === 'object') {
+        // Se retornar { users: [...] }
+        if ('users' in response && Array.isArray(response.users)) {
+          console.log('✅ Service: Usuários encontrados (formato {users}):', response.users.length);
+          return response.users;
+        }
+        // Se retornar array diretamente
+        if (Array.isArray(response)) {
+          console.log('✅ Service: Usuários encontrados (formato array):', response.length);
+          return response;
+        }
+      }
+      
+      console.warn('⚠️ Service: Resposta em formato inesperado, retornando array vazio');
+      return [];
     } catch (error) {
-      console.error('Erro no UserService.getAll:', error);
+      console.error('❌ Service: Erro ao buscar usuários:', error);
       throw error;
     }
   }
@@ -38,9 +68,165 @@ export class UserService {
    */
   static async getById(id: string): Promise<User> {
     try {
-      return await api.get<User>(`/users/${id}`);
+      console.log('🔍 Service: Buscando usuário por ID:', id);
+      
+      const response = await api.get<any>(`/users/${id}`);
+      
+      console.log('🔍 Service: Resposta bruta da API:', response);
+      
+      // Verificar se a resposta tem a estrutura esperada
+      if (response && typeof response === 'object') {
+        // Se retornar { user: {...} }
+        if ('user' in response && response.user) {
+          console.log('✅ Service: Usuário encontrado (formato {user}):', response.user);
+          return response.user;
+        }
+        // Se retornar o objeto do usuário diretamente
+        if ('id' in response && 'nome' in response && 'email' in response) {
+          console.log('✅ Service: Usuário encontrado (formato direto):', response);
+          return response as User;
+        }
+      }
+      
+      throw new Error('Resposta da API em formato inesperado');
     } catch (error) {
-      console.error('Erro no UserService.getById:', error);
+      console.error('❌ Service: Erro ao buscar usuário por ID:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          throw new Error('Usuário não encontrado');
+        }
+        
+        if (error.message.includes('500')) {
+          throw new Error('Erro interno do servidor ao buscar usuário');
+        }
+        
+        if (error.message.includes('Failed to fetch')) {
+          throw new Error('Erro de conexão ao buscar usuário');
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Criar novo usuário
+   */
+  static async create(data: CreateUserRequest): Promise<User> {
+    try {
+      console.log('🔍 Service: Criando usuário:', data.email);
+      
+      const response = await api.post<any>('/users', data);
+      
+      console.log('🔍 Service: Resposta da criação:', response);
+      
+      // Verificar estrutura da resposta
+      if (response && typeof response === 'object') {
+        // Se retornar { user: {...} }
+        if ('user' in response && response.user) {
+          console.log('✅ Service: Usuário criado (formato {user}):', response.user);
+          return response.user;
+        }
+        // Se retornar o objeto do usuário diretamente
+        if ('id' in response && 'nome' in response && 'email' in response) {
+          console.log('✅ Service: Usuário criado (formato direto):', response);
+          return response as User;
+        }
+      }
+      
+      throw new Error('Resposta da API em formato inesperado');
+    } catch (error) {
+      console.error('❌ Service: Erro ao criar usuário:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('já está em uso') || error.message.includes('409')) {
+          throw new Error('Email já está em uso');
+        }
+        
+        if (error.message.includes('validation') || error.message.includes('400')) {
+          throw new Error('Dados inválidos');
+        }
+        
+        if (error.message.includes('Failed to fetch')) {
+          throw new Error('Erro de conexão com o servidor');
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Atualizar usuário
+   */
+  static async update(id: string, data: UpdateUserRequest): Promise<User> {
+    try {
+      console.log('🔍 Service: Atualizando usuário:', id);
+      
+      const response = await api.put<any>(`/users/${id}`, data);
+      
+      console.log('🔍 Service: Resposta da atualização:', response);
+      
+      // Verificar estrutura da resposta
+      if (response && typeof response === 'object') {
+        // Se retornar { user: {...} }
+        if ('user' in response && response.user) {
+          console.log('✅ Service: Usuário atualizado (formato {user}):', response.user);
+          return response.user;
+        }
+        // Se retornar o objeto do usuário diretamente
+        if ('id' in response && 'nome' in response && 'email' in response) {
+          console.log('✅ Service: Usuário atualizado (formato direto):', response);
+          return response as User;
+        }
+      }
+      
+      throw new Error('Resposta da API em formato inesperado');
+    } catch (error) {
+      console.error('❌ Service: Erro ao atualizar usuário:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          throw new Error('Usuário não encontrado');
+        }
+        
+        if (error.message.includes('já está em uso') || error.message.includes('409')) {
+          throw new Error('Email já está em uso');
+        }
+        
+        if (error.message.includes('validation') || error.message.includes('400')) {
+          throw new Error('Dados inválidos');
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Deletar usuário
+   */
+  static async delete(id: string): Promise<void> {
+    try {
+      console.log('🔍 Service: Deletando usuário:', id);
+      
+      await api.delete(`/users/${id}`);
+      
+      console.log('✅ Service: Usuário deletado com sucesso');
+    } catch (error) {
+      console.error('❌ Service: Erro ao deletar usuário:', error);
+      
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          throw new Error('Usuário não encontrado');
+        }
+        
+        if (error.message.includes('constraint')) {
+          throw new Error('Não é possível excluir usuário com reservas associadas');
+        }
+      }
+      
       throw error;
     }
   }
@@ -54,31 +240,12 @@ export class UserService {
       
       // Atualizar dados locais
       if (typeof window !== 'undefined') {
-        localStorage.setItem('playbee_user', JSON.stringify(user));
+        localStorage.setItem('user-data', JSON.stringify(user));
       }
 
       return user;
     } catch (error) {
       console.error('Erro no UserService.getProfile:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Atualizar dados do usuário
-   */
-  static async update(data: UpdateUserRequest): Promise<User> {
-    try {
-      const user = await api.put<User>('/users/profile', data);
-      
-      // Atualizar dados locais
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('playbee_user', JSON.stringify(user));
-      }
-
-      return user;
-    } catch (error) {
-      console.error('Erro no UserService.update:', error);
       throw error;
     }
   }
@@ -111,19 +278,6 @@ export class UserService {
         totalSpent: 0,
         memberSince: new Date().toISOString(),
       };
-    }
-  }
-
-  /**
-   * Deletar conta do usuário
-   */
-  static async deleteAccount(): Promise<void> {
-    try {
-      await api.delete<void>('/users/profile');
-      // O logout já é feito automaticamente no api.ts se houver erro 401
-    } catch (error) {
-      console.error('Erro no UserService.deleteAccount:', error);
-      throw error;
     }
   }
 

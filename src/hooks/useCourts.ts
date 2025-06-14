@@ -146,30 +146,40 @@ export const useCourts = (): UseCourtResult => {
 // Hook para buscar uma quadra específica
 export const useCourt = (id: string) => {
   const [court, setCourt] = useState<Court | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
   const refreshCourt = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
       setError('');
       
+      console.log('🔍 useCourt: Carregando quadra com ID:', id);
+      
       const data = await CourtsService.getById(id);
       setCourt(data);
+      
+      console.log('✅ useCourt: Quadra carregada:', data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar quadra';
       setError(errorMessage);
-      console.error('Erro ao carregar quadra:', err);
+      console.error('❌ useCourt: Erro ao carregar quadra:', err);
     } finally {
       setIsLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
-    refreshCourt();
-  }, [refreshCourt]);
+    if (id) {
+      console.log('🔍 useCourt: useEffect disparado para ID:', id);
+      refreshCourt();
+    }
+  }, [id, refreshCourt]);
 
   return {
     court,

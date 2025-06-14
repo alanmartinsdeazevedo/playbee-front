@@ -56,8 +56,35 @@ export class CourtsService {
    * Buscar uma quadra por ID
    */
   static async getById(id: string): Promise<Court> {
-    const response = await api.get<Court>(`/court/${id}`);
-    return response;
+    try {
+      console.log('🔍 Service: Buscando quadra por ID:', id);
+      
+      // O backend retorna { court: Court } baseado no get-court-by-id-controller.ts
+      const response = await api.get<{ court: Court }>(`/court/${id}`);
+      
+      console.log('✅ Service: Quadra encontrada:', response.court);
+      return response.court;
+      
+    } catch (error) {
+      console.error('❌ Service: Erro ao buscar quadra por ID:', error);
+      
+      // Verificar tipos específicos de erro
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          throw new Error('Quadra não encontrada');
+        }
+        
+        if (error.message.includes('500')) {
+          throw new Error('Erro interno do servidor ao buscar quadra');
+        }
+        
+        if (error.message.includes('Failed to fetch')) {
+          throw new Error('Erro de conexão ao buscar quadra');
+        }
+      }
+      
+      throw error;
+    }
   }
 
   /**

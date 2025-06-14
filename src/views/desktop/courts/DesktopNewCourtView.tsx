@@ -19,6 +19,7 @@ import {
   Select,
   FormHelperText,
   Skeleton,
+  CircularProgress,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -60,6 +61,7 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
 
   const [errors, setErrors] = useState<Partial<CourtForm>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   const isEditMode = mode === 'edit';
   const isLoading = isEditMode ? isLoadingCourt : false;
@@ -76,16 +78,32 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
 
   // Carregar dados da quadra no formulário (modo edição)
   useEffect(() => {
-    if (isEditMode && court) {
+    console.log('🔍 Effect - Mode:', mode, 'Court ID:', courtId, 'Court data:', court);
+    
+    if (isEditMode && court && !isDataLoaded) {
+      console.log('✅ Carregando dados da quadra no formulário:', court);
+      
       setForm({
-        nome: court.nome,
-        tipo: court.tipo,
-        localizacao: court.localizacao,
+        nome: court.nome || '',
+        tipo: court.tipo || '',
+        localizacao: court.localizacao || '',
       });
+      
+      setIsDataLoaded(true);
+      console.log('✅ Dados carregados no formulário');
     }
-  }, [isEditMode, court]);
+  }, [isEditMode, court, isDataLoaded]);
+
+  // Debug effect para monitorar mudanças
+  useEffect(() => {
+    console.log('🔍 Debug - Form state:', form);
+    console.log('🔍 Debug - Is loading:', isLoading);
+    console.log('🔍 Debug - Court data:', court);
+    console.log('🔍 Debug - Data loaded:', isDataLoaded);
+  }, [form, isLoading, court, isDataLoaded]);
 
   const handleInputChange = (field: keyof CourtForm, value: string) => {
+    console.log('🔍 Input change:', field, '=', value);
     setForm(prev => ({ ...prev, [field]: value }));
     
     // Clear error when user starts typing
@@ -136,9 +154,11 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
           localizacao: form.localizacao.trim(),
         };
 
+        console.log('🔍 Atualizando quadra:', courtId, updateData);
         const success = await updateCourt(courtId, updateData);
         
         if (success) {
+          console.log('✅ Quadra atualizada com sucesso');
           router.push('/desktop/courts?updated=true');
         }
       } else {
@@ -149,14 +169,16 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
           localizacao: form.localizacao.trim(),
         };
 
+        console.log('🔍 Criando nova quadra:', courtData);
         const newCourt = await createCourt(courtData);
         
         if (newCourt) {
+          console.log('✅ Quadra criada com sucesso');
           router.push('/desktop/courts?created=true');
         }
       }
     } catch (err) {
-      console.error(`Erro ao ${isEditMode ? 'atualizar' : 'criar'} quadra:`, err);
+      console.error(`❌ Erro ao ${isEditMode ? 'atualizar' : 'criar'} quadra:`, err);
     } finally {
       setIsSubmitting(false);
     }
@@ -166,9 +188,9 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
     if (isEditMode && court) {
       // Modo edição: voltar aos valores originais
       setForm({
-        nome: court.nome,
-        tipo: court.tipo,
-        localizacao: court.localizacao,
+        nome: court.nome || '',
+        tipo: court.tipo || '',
+        localizacao: court.localizacao || '',
       });
     } else {
       // Modo criação: limpar formulário
@@ -230,6 +252,20 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
     );
   }
 
+  // Se está em modo edição mas ainda não carregou os dados, mostrar loading
+  if (isEditMode && courtId && !court && !loadError) {
+    return (
+      <Container maxWidth="md">
+        <Box display="flex" flex-direction="column" alignItems="center" justifyContent="center" minHeight="50vh" gap={2}>
+          <CircularProgress />
+          <Typography variant="body2" color="text.secondary">
+            Carregando dados da quadra...
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
+
   return (
     <Container maxWidth="md">
       {/* Header */}
@@ -247,7 +283,7 @@ export const DesktopNewCourtView = ({ mode = 'create' }: Props = {}) => {
           </Typography>
           <Typography variant="body1" color="text.secondary">
             {isEditMode 
-              ? 'Atualize as informações da quadra esportiva'
+              ? `Atualize as informações da quadra esportiva${court ? ` "${court.nome}"` : ''}`
               : 'Cadastre uma nova quadra esportiva no sistema'
             }
           </Typography>
