@@ -1,4 +1,3 @@
-// src/views/dashboard/DashboardView.tsx
 'use client';
 
 import { useState, useEffect } from 'react';

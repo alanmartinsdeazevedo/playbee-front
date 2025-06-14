@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://play.api.beezes.com.br';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
 
 class SimpleApiClient {
   private baseUrl: string;
@@ -25,11 +25,11 @@ class SimpleApiClient {
     const url = `${this.baseUrl}${endpoint}`;
     
     const token = this.getAuthToken();
-    
     const optionsHeaders = options.headers as Record<string, string> | undefined;
     
+    // Só adicionar Content-Type se houver body
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(options.body && { 'Content-Type': 'application/json' }),
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(optionsHeaders || {}),
     };

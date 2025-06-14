@@ -1,52 +1,39 @@
+// src/types/court.ts
+
 export interface Court {
   id: string;
-  name: string;
-  description?: string;
-  sport: SportType;
-  location: string;
-  price: number;
-  rating: number;
-  available: boolean;
-  features: string[];
-  images: string[];
-  capacity: number;
-  workingHours: {
-    start: string;
-    end: string;
-  };
-  createdAt: string;
-  updatedAt: string;
+  nome: string;
+  tipo: string;
+  localizacao: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export type SportType = 'futebol' | 'basquete' | 'tenis' | 'volei' | 'outros';
-
-// Criar quadra
 export interface CreateCourtRequest {
-  name: string;
-  description?: string;
-  sport: SportType;
-  location: string;
-  price: number;
-  features: string[];
-  capacity: number;
-  workingHours: {
-    start: string;
-    end: string;
-  };
+  nome: string;
+  tipo: string;
+  localizacao: string;
 }
 
-// Atualizar quadra
 export interface UpdateCourtRequest {
-  name?: string;
-  description?: string;
-  sport?: SportType;
-  location?: string;
-  price?: number;
-  features?: string[];
-  capacity?: number;
-  workingHours?: {
-    start: string;
-    end: string;
-  };
+  nome?: string;
+  tipo?: string;
+  localizacao?: string;
+}
+
+export interface CourtResponse {
+  court: Court;
+}
+
+export interface CourtsListResponse {
+  courts: Court[];
+}
+
+// Tipos para o frontend (com dados extras)
+export interface CourtDisplay extends Court {
+  rating?: number;
   available?: boolean;
+  image?: string;
+  features?: string[];
+  description?: string;
 }

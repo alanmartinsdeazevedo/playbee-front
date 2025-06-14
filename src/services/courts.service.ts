@@ -1,118 +1,97 @@
 import { api } from '@/lib/api';
-import type { Court, CreateCourtRequest, UpdateCourtRequest } from '@/types/court';
+import type { 
+  Court, 
+  CreateCourtRequest, 
+  UpdateCourtRequest, 
+  CourtResponse, 
+  CourtsListResponse 
+} from '@/types/court';
 
-export class CourtService {
-  
+export class CourtsService {
   /**
-   * Buscar todas as quadras
+   * Criar uma nova quadra
+   */
+  static async create(data: CreateCourtRequest): Promise<Court> {
+    const response = await api.post<CourtResponse>('/court', data);
+    return response.court;
+  }
+
+  /**
+   * Listar todas as quadras
    */
   static async getAll(): Promise<Court[]> {
     try {
-      const courts = await api.get<Court[]>('/courts');
-      return courts;
+      const response = await api.get<CourtsListResponse>('/court');
+      
+      // Verificar se a resposta tem a estrutura esperada
+      if (response && typeof response === 'object') {
+        // Se retornar { courts: [...] }
+        if ('courts' in response && Array.isArray(response.courts)) {
+          return response.courts;
+        }
+        // Se retornar array diretamente
+        if (Array.isArray(response)) {
+          return response;
+        }
+        // Se retornar objeto vazio ou formato inesperado
+        console.warn('Resposta da API em formato inesperado:', response);
+        return [];
+      }
+      
+      console.warn('Resposta vazia da API');
+      return [];
     } catch (error) {
-      console.error('Erro ao buscar quadras:', error);
-      throw new Error('Erro ao buscar quadras');
+      console.error('Erro detalhado ao buscar quadras:', error);
+      
+      // Se for erro 500, dar uma mensagem mais específica
+      if (error instanceof Error && error.message.includes('500')) {
+        throw new Error('Erro interno do servidor. Verifique o backend.');
+      }
+      
+      throw error;
     }
   }
 
   /**
-   * Buscar quadra por ID
+   * Buscar uma quadra por ID
    */
   static async getById(id: string): Promise<Court> {
-    try {
-      const court = await api.get<Court>(`/courts/${id}`);
-      return court;
-    } catch (error) {
-      console.error('Erro ao buscar quadra:', error);
-      throw new Error('Erro ao buscar quadra');
-    }
+    const response = await api.get<Court>(`/court/${id}`);
+    return response;
   }
 
   /**
-   * Buscar quadras disponíveis para um horário específico
+   * Atualizar uma quadra
    */
-  static async getAvailable(
-    date: string,
-    startTime: string,
-    endTime: string
-  ): Promise<Court[]> {
-    try {
-      const courts = await api.get<Court[]>(
-        `/courts/available?date=${date}&startTime=${startTime}&endTime=${endTime}`
-      );
-      return courts;
-    } catch (error) {
-      console.error('Erro ao buscar quadras disponíveis:', error);
-      throw new Error('Erro ao buscar quadras disponíveis');
-    }
+  static async update(id: string, data: UpdateCourtRequest): Promise<Court> {
+    const response = await api.put<CourtResponse>(`/court/${id}`, data);
+    return response.court;
   }
 
   /**
-   * Criar nova quadra
-   */
-  static async create(courtData: CreateCourtRequest): Promise<Court> {
-    try {
-      const newCourt = await api.post<Court>('/courts', courtData);
-      return newCourt;
-    } catch (error) {
-      console.error('Erro ao criar quadra:', error);
-      
-      if (error instanceof Error) {
-        if (error.message.includes('409')) {
-          throw new Error('Quadra já existe com esse nome');
-        }
-        if (error.message.includes('400')) {
-          throw new Error('Dados da quadra inválidos');
-        }
-      }
-      
-      throw new Error('Erro ao criar quadra');
-    }
-  }
-
-  /**
-   * Atualizar quadra
-   */
-  static async update(id: string, courtData: UpdateCourtRequest): Promise<Court> {
-    try {
-      const updatedCourt = await api.put<Court>(`/courts/${id}`, courtData);
-      return updatedCourt;
-    } catch (error) {
-      console.error('Erro ao atualizar quadra:', error);
-      
-      if (error instanceof Error) {
-        if (error.message.includes('404')) {
-          throw new Error('Quadra não encontrada');
-        }
-        if (error.message.includes('400')) {
-          throw new Error('Dados da quadra inválidos');
-        }
-      }
-      
-      throw new Error('Erro ao atualizar quadra');
-    }
-  }
-
-  /**
-   * Deletar quadra
+   * Deletar uma quadra
    */
   static async delete(id: string): Promise<void> {
     try {
-      await api.delete(`/courts/${id}`);
-    } catch (error) {
-      console.error('Erro ao deletar quadra:', error);
+      console.log('🔍 Service: Deletando quadra com ID:', id);
       
-      if (error instanceof Error) {
-        if (error.message.includes('404')) {
-          throw new Error('Quadra não encontrada');
-        }
-        if (error.message.includes('409')) {
-          throw new Error('Não é possível deletar quadra com reservas ativas');
-        }
+      const response = await api.delete(`/court/${id}`);
+      
+      console.log('✅ Service: Quadra deletada, resposta:', response);
+    } catch (error) {
+      console.error('❌ Service: Erro ao deletar quadra:', error);
+      
+      // Verificar se é erro de não encontrado
+      if (error instanceof Error && error.message.includes('404')) {
+        throw new Error('Quadra não encontrada');
       }
       
-      throw new Error('Erro ao deletar quadra');
+      // Verificar se é erro de integridade
+      if (error instanceof Error && error.message.includes('reservas associadas')) {
+        throw new Error('Não é possível excluir quadra com reservas associadas');
+      }
+      
+      throw error;
     }
   }
 
@@ -120,45 +99,70 @@ export class CourtService {
    * Buscar quadras por tipo
    */
   static async getByType(tipo: string): Promise<Court[]> {
-    try {
-      const courts = await api.get<Court[]>(`/courts/type/${tipo}`);
-      return courts;
-    } catch (error) {
-      console.error('Erro ao buscar quadras por tipo:', error);
-      throw new Error('Erro ao buscar quadras por tipo');
-    }
+    const courts = await this.getAll();
+    return courts.filter(court => 
+      court.tipo.toLowerCase().includes(tipo.toLowerCase())
+    );
   }
 
   /**
    * Buscar quadras por localização
    */
   static async getByLocation(localizacao: string): Promise<Court[]> {
-    try {
-      const courts = await api.get<Court[]>(`/courts/location/${encodeURIComponent(localizacao)}`);
-      return courts;
-    } catch (error) {
-      console.error('Erro ao buscar quadras por localização:', error);
-      throw new Error('Erro ao buscar quadras por localização');
-    }
+    const courts = await this.getAll();
+    return courts.filter(court => 
+      court.localizacao.toLowerCase().includes(localizacao.toLowerCase())
+    );
   }
 
   /**
-   * Verificar disponibilidade de uma quadra específica
+   * Buscar quadras com filtros
    */
-  static async checkAvailability(
-    courtId: string,
-    date: string,
-    startTime: string,
-    endTime: string
-  ): Promise<boolean> {
-    try {
-      const response = await api.get<{ available: boolean }>(
-        `/courts/${courtId}/availability?date=${date}&startTime=${startTime}&endTime=${endTime}`
-      );
-      return response.available;
-    } catch (error) {
-      console.error('Erro ao verificar disponibilidade da quadra:', error);
-      throw new Error('Erro ao verificar disponibilidade da quadra');
+  static async search(filters: {
+    nome?: string;
+    tipo?: string;
+    localizacao?: string;
+  }): Promise<Court[]> {
+    const courts = await this.getAll();
+    
+    return courts.filter(court => {
+      const matchesNome = !filters.nome || 
+        court.nome.toLowerCase().includes(filters.nome.toLowerCase());
+      
+      const matchesTipo = !filters.tipo || 
+        court.tipo.toLowerCase().includes(filters.tipo.toLowerCase());
+      
+      const matchesLocalizacao = !filters.localizacao || 
+        court.localizacao.toLowerCase().includes(filters.localizacao.toLowerCase());
+      
+      return matchesNome && matchesTipo && matchesLocalizacao;
+    });
+  }
+
+  /**
+   * Validar dados antes de criar/atualizar
+   */
+  static validateCourtData(data: CreateCourtRequest | UpdateCourtRequest): string[] {
+    const errors: string[] = [];
+
+    if ('nome' in data && data.nome !== undefined) {
+      if (!data.nome || data.nome.trim().length < 3) {
+        errors.push('Nome deve ter pelo menos 3 caracteres');
+      }
     }
+
+    if ('tipo' in data && data.tipo !== undefined) {
+      if (!data.tipo || data.tipo.trim().length < 3) {
+        errors.push('Tipo deve ter pelo menos 3 caracteres');
+      }
+    }
+
+    if ('localizacao' in data && data.localizacao !== undefined) {
+      if (!data.localizacao || data.localizacao.trim().length < 3) {
+        errors.push('Localização deve ter pelo menos 3 caracteres');
+      }
+    }
+
+    return errors;
   }
 }

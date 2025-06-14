@@ -1,40 +1,53 @@
-import type { User } from "./auth";
-import type { Court } from "./court";
+// src/types/reservation.ts
 
-export interface Reservation {
+export interface Schedule {
   id: string;
+  dataHoraInicio: string; // ISO date string
+  dataHoraFim: string; // ISO date string
+  status: string;
   userId: string;
   courtId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  duration: number;
-  totalPrice: number;
-  status: ReservationStatus;
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-  
-  user?: User;
-  court?: Court;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
-
-//Criar Reserva
-export interface CreateReservationRequest {
+export interface CreateScheduleRequest {
+  dataHoraInicio: Date;
+  dataHoraFim: Date;
+  status: string;
+  userId: string;
   courtId: string;
-  date: string;
-  startTime: string;
-  duration: number;
-  notes?: string;
 }
 
-// Atualizar Reserva
-export interface UpdateReservationRequest {
-  date?: string;
-  startTime?: string;
+export interface UpdateScheduleRequest {
+  dataHoraInicio?: string;
+  dataHoraFim?: string;
+  status?: string;
+  userId?: string;
+  courtId?: string;
+}
+
+export interface ScheduleResponse {
+  schedule: Schedule;
+}
+
+// Tipos para o frontend (com dados extras)
+export interface ReservationDisplay extends Schedule {
+  courtName?: string;
+  courtLocation?: string;
+  sport?: string;
+  userName?: string;
+  userEmail?: string;
   duration?: number;
-  notes?: string;
+  icon?: string;
+}
+
+export type ReservationStatus = 'upcoming' | 'completed' | 'cancelled';
+
+export interface ReservationFilter {
   status?: ReservationStatus;
+  courtId?: string;
+  userId?: string;
+  dateFrom?: string;
+  dateTo?: string;
 }
