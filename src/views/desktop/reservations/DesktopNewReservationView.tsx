@@ -32,17 +32,13 @@ import {
   Schedule as ScheduleIcon,
   Edit as EditIcon,
   Add as AddIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material';
 import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import { useCourts } from '@/hooks/useCourts';
+import { useUsers } from '@/hooks/useUsers';
 import { useReservations, useReservation } from '@/hooks/useReservations';
 import type { CreateScheduleRequest, UpdateScheduleRequest } from '@/types/reservation';
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-}
 
 interface ReservationForm {
   courtId: string;
@@ -68,6 +64,7 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
   const reservationId = mode === 'edit' ? (params.id as string) : null;
 
   const { courts } = useCourts();
+  const { users } = useUsers();
   const { createReservation, updateReservation, error: crudError, clearError } = useReservations();
   const { reservation, isLoading: isLoadingReservation, error: loadError } = useReservation(reservationId || '');
 
@@ -88,14 +85,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
   const isEditMode = mode === 'edit';
   const isLoading = isEditMode ? isLoadingReservation : false;
 
-  // Mock data para usuários - em produção viria de um hook useUsers()
-  const users: User[] = [
-    { id: 1, name: 'João Silva', email: 'joao@email.com' },
-    { id: 2, name: 'Maria Santos', email: 'maria@email.com' },
-    { id: 3, name: 'Pedro Costa', email: 'pedro@email.com' },
-    { id: 4, name: 'Ana Lima', email: 'ana@email.com' },
-  ];
-
   const statusOptions = [
     { value: 'agendado', label: 'Agendado', color: 'primary' },
     { value: 'confirmado', label: 'Confirmado', color: 'success' },
@@ -104,15 +93,13 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
   ];
 
   const availableCourts = courts.filter(court => {
-    // Simular disponibilidade - em produção viria da API
-    return Math.random() > 0.2; // 80% disponíveis
+    return Math.random() > 0.2;
   });
 
   const selectedCourt = courts.find(court => court.id === form.courtId);
-  const selectedUser = users.find(user => user.id.toString() === form.userId);
+  const selectedUser = users.find(user => user.id === form.userId);
   const selectedStatus = statusOptions.find(status => status.value === form.status);
 
-  // Carregar dados da reserva no formulário (modo edição)
   useEffect(() => {
     if (isEditMode && reservation) {
       const startDate = new Date(reservation.dataHoraInicio);
@@ -131,7 +118,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
     }
   }, [isEditMode, reservation]);
 
-  // Calculate duration when start/end time changes
   useEffect(() => {
     if (form.startTime && form.endTime) {
       const start = new Date(`2000-01-01T${form.startTime}`);
@@ -140,7 +126,7 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
       if (end > start) {
         const diffMs = end.getTime() - start.getTime();
         const hours = diffMs / (1000 * 60 * 60);
-        setForm(prev => ({ ...prev, duration: Math.round(hours * 2) / 2 })); // Round to nearest 0.5h
+        setForm(prev => ({ ...prev, duration: Math.round(hours * 2) / 2 }));
       } else {
         setForm(prev => ({ ...prev, duration: 0 }));
       }
@@ -150,12 +136,10 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
   const handleInputChange = (field: keyof ReservationForm, value: string | number) => {
     setForm(prev => ({ ...prev, [field]: value }));
     
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
     
-    // Clear API error
     if (crudError) {
       clearError();
     }
@@ -206,7 +190,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
       const endDateTime = new Date(`${form.date}T${form.endTime}`);
 
       if (isEditMode && reservationId) {
-        // Modo edição
         const updateData: UpdateScheduleRequest = {
           dataHoraInicio: startDateTime.toISOString(),
           dataHoraFim: endDateTime.toISOString(),
@@ -221,7 +204,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
           router.push(`/desktop/reservations/${reservationId}?updated=true`);
         }
       } else {
-        // Modo criação
         const reservationData: CreateScheduleRequest = {
           dataHoraInicio: startDateTime,
           dataHoraFim: endDateTime,
@@ -245,7 +227,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
 
   const handleReset = () => {
     if (isEditMode && reservation) {
-      // Modo edição: voltar aos valores originais
       const startDate = new Date(reservation.dataHoraInicio);
       const endDate = new Date(reservation.dataHoraFim);
 
@@ -260,7 +241,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
         notes: '',
       });
     } else {
-      // Modo criação: limpar formulário
       setForm({
         courtId: preSelectedCourtId || '',
         userId: '',
@@ -276,17 +256,15 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
     clearError();
   };
 
-  // Generate time options (7:00 to 22:00, every 30 minutes)
   const timeOptions = [];
   for (let hour = 7; hour <= 22; hour++) {
     for (let minute of [0, 30]) {
-      if (hour === 22 && minute === 30) break; // Stop at 22:00
+      if (hour === 22 && minute === 30) break;
       const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
       timeOptions.push(time);
     }
   }
 
-  // Get minimum date (today)
   const today = new Date().toISOString().split('T')[0];
 
   const getSportEmoji = (tipo: string): string => {
@@ -298,7 +276,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
     return '🏟️';
   };
 
-  // Loading skeleton para modo edição
   if (isLoading) {
     return (
       <Container maxWidth="lg">
@@ -317,7 +294,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
     );
   }
 
-  // Erro ao carregar reserva (modo edição)
   if (isEditMode && loadError) {
     return (
       <Container maxWidth="lg">
@@ -337,7 +313,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
 
   return (
     <Container maxWidth="lg">
-      {/* Header */}
       <Box display="flex" alignItems="center" gap={2} mb={4}>
         <Button
           startIcon={<ArrowBackIcon />}
@@ -359,7 +334,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
         </Box>
       </Box>
 
-      {/* API Error */}
       {crudError && (
         <Alert 
           severity="error" 
@@ -371,8 +345,7 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
       )}
 
       <Grid container spacing={4}>
-        {/* Form */}
-        <Grid size= {{ xs:12, md:8 }}>
+        <Grid size={{ xs:12, md:8 }}>
           <Card>
             <CardContent sx={{ p: 4 }}>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -381,7 +354,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
               </Typography>
 
               <Stack spacing={3} sx={{ mt: 3 }}>
-                {/* Court Selection */}
                 <FormControl fullWidth error={!!errors.courtId}>
                   <InputLabel>Quadra *</InputLabel>
                   <Select
@@ -406,7 +378,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   {errors.courtId && <FormHelperText>{errors.courtId}</FormHelperText>}
                 </FormControl>
 
-                {/* User Selection */}
                 <FormControl fullWidth error={!!errors.userId}>
                   <InputLabel>Usuário *</InputLabel>
                   <Select
@@ -415,12 +386,17 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                     label="Usuário *"
                   >
                     {users.map((user) => (
-                      <MenuItem key={user.id} value={user.id.toString()}>
-                        <Box>
-                          <Typography variant="body1">{user.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {user.email}
-                          </Typography>
+                      <MenuItem key={user.id} value={user.id}>
+                        <Box display="flex" alignItems="center" gap={2}>
+                          <Avatar sx={{ width: 32, height: 32 }}>
+                            {user.nome.charAt(0)}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="body1">{user.nome}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {user.email}
+                            </Typography>
+                          </Box>
                         </Box>
                       </MenuItem>
                     ))}
@@ -428,7 +404,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   {errors.userId && <FormHelperText>{errors.userId}</FormHelperText>}
                 </FormControl>
 
-                {/* Date */}
                 <TextField
                   label="Data *"
                   type="date"
@@ -441,7 +416,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   fullWidth
                 />
 
-                {/* Time Range */}
                 <Stack direction="row" spacing={2}>
                   <FormControl fullWidth error={!!errors.startTime}>
                     <InputLabel>Horário de Início *</InputLabel>
@@ -476,7 +450,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   </FormControl>
                 </Stack>
 
-                {/* Status (apenas no modo edição) */}
                 {isEditMode && (
                   <FormControl fullWidth error={!!errors.status}>
                     <InputLabel>Status *</InputLabel>
@@ -501,7 +474,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   </FormControl>
                 )}
 
-                {/* Duration Display */}
                 {form.duration > 0 && (
                   <Alert severity="info" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <AccessTimeIcon />
@@ -512,7 +484,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   </Alert>
                 )}
 
-                {/* Notes */}
                 <TextField
                   label="Observações"
                   multiline
@@ -523,7 +494,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   fullWidth
                 />
 
-                {/* Actions */}
                 <Stack direction="row" spacing={2} justifyContent="flex-end" sx={{ mt: 4 }}>
                   <Button
                     variant="outlined"
@@ -557,10 +527,8 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
           </Card>
         </Grid>
 
-        {/* Summary Sidebar */}
-        <Grid size= {{ xs:12, md:4 }}>
+        <Grid size={{ xs:12, md:4 }}>
           <Stack spacing={3}>
-            {/* Selected Court Info */}
             {selectedCourt && (
               <Card>
                 <CardContent>
@@ -586,20 +554,20 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
               </Card>
             )}
 
-            {/* Selected User Info */}
             {selectedUser && (
               <Card>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon color="primary" />
                     Usuário Selecionado
                   </Typography>
                   <Box display="flex" alignItems="center" gap={2} mt={2}>
                     <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                      {selectedUser.name.charAt(0)}
+                      {selectedUser.nome.charAt(0)}
                     </Avatar>
                     <Box>
                       <Typography variant="subtitle1" fontWeight="bold">
-                        {selectedUser.name}
+                        {selectedUser.nome}
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
                         {selectedUser.email}
@@ -610,7 +578,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
               </Card>
             )}
 
-            {/* Reservation Summary */}
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -693,45 +660,6 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
               </CardContent>
             </Card>
 
-            {/* Pricing Info (apenas no modo criação) */}
-            {!isEditMode && (
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Informações de Preço
-                  </Typography>
-                  <Stack spacing={1}>
-                    <Box display="flex" justifyContent="space-between">
-                      <Typography variant="body2" color="text.secondary">
-                        Valor por hora:
-                      </Typography>
-                      <Typography variant="body2" fontWeight="bold">
-                        R$ 80,00
-                      </Typography>
-                    </Box>
-                    <Box display="flex" justifyContent="space-between">
-                      <Typography variant="body2" color="text.secondary">
-                        Duração:
-                      </Typography>
-                      <Typography variant="body2">
-                        {form.duration}h
-                      </Typography>
-                    </Box>
-                    <Divider />
-                    <Box display="flex" justifyContent="space-between">
-                      <Typography variant="h6" color="primary.main">
-                        Total:
-                      </Typography>
-                      <Typography variant="h6" color="primary.main" fontWeight="bold">
-                        R$ {(form.duration * 80).toFixed(2)}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Original Data (apenas no modo edição) */}
             {isEditMode && reservation && (
               <Card>
                 <CardContent>
@@ -769,13 +697,12 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
               </Card>
             )}
 
-            {/* Info */}
             <Alert severity={isEditMode ? "warning" : "info"}>
               <Typography variant="body2">
                 <strong>{isEditMode ? 'Atenção:' : 'Lembre-se:'}</strong>{' '}
                 {isEditMode 
                   ? 'As alterações afetarão a reserva permanentemente. Verifique todos os dados antes de salvar.'
-                  : 'As reservas podem ser canceladas até 2 horas antes do horário agendado sem cobrança.'
+                  : 'As quadras são gratuitas e podem ser canceladas até 2 horas antes do horário agendado.'
                 }
               </Typography>
             </Alert>

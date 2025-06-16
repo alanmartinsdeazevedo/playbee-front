@@ -18,8 +18,12 @@ export const RegisterSchema = z.object({
 
 export const CreateReservationSchema = z.object({
   courtId: z.string().min(1, 'Selecione uma quadra'),
-  date: z.string().min(1, 'Selecione uma data'),
-  startTime: z.string().min(1, 'Selecione um horário'),
-  duration: z.number().min(1, 'Duração mínima é 1 hora').max(8, 'Duração máxima é 8 horas'),
+  userId: z.string().min(1, 'Selecione um usuário'),
+  dataHoraInicio: z.date(),
+  dataHoraFim: z.date(),
+  status: z.string().min(1, 'Status é obrigatório'),
   notes: z.string().optional(),
+}).refine((data) => data.dataHoraFim > data.dataHoraInicio, {
+  message: "Horário de fim deve ser posterior ao início",
+  path: ["dataHoraFim"],
 });

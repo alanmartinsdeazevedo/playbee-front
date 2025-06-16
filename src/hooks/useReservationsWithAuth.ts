@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ReservationsService } from '@/services/reservations.service';
+import { AuthService } from '@/lib/auth';
 import type { 
   Schedule, 
   CreateScheduleRequest, 
@@ -7,7 +8,7 @@ import type {
   ReservationFilter 
 } from '@/types/reservation';
 
-interface UseReservationsResult {
+interface UseReservationsWithAuthResult {
   reservations: Schedule[];
   isLoading: boolean;
   error: string;
@@ -19,7 +20,7 @@ interface UseReservationsResult {
   clearError: () => void;
 }
 
-export const useReservations = (): UseReservationsResult => {
+export const useReservationsWithAuth = (): UseReservationsWithAuthResult => {
   const [reservations, setReservations] = useState<Schedule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -29,7 +30,22 @@ export const useReservations = (): UseReservationsResult => {
       setIsLoading(true);
       setError('');
       
-      const data = await ReservationsService.getAll();
+      const user = AuthService.getUser();
+      if (!user) {
+        setError('Usuário não autenticado');
+        return;
+      }
+
+      let data: Schedule[];
+      
+      if (user.role === 'ADMIN') {
+        // Admin vê todas as reservas
+        data = await ReservationsService.getAll();
+      } else {
+        // Usuário comum vê apenas suas reservas
+        data = await ReservationsService.getAllByUser(user.id);
+      }
+      
       setReservations(data);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar reservas';
@@ -62,6 +78,7 @@ export const useReservations = (): UseReservationsResult => {
 
       const newReservation = await ReservationsService.create(data);
       
+      // Atualizar lista local
       setReservations(prev => [...prev, newReservation]);
       
       return newReservation;
@@ -157,39 +174,5 @@ export const useReservations = (): UseReservationsResult => {
     deleteReservation,
     searchReservations,
     clearError,
-  };
-};
-
-export const useReservation = (id: string) => {
-  const [reservation, setReservation] = useState<Schedule | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string>('');
-
-  const refreshReservation = useCallback(async () => {
-    if (!id) return;
-
-    try {
-      setIsLoading(true);
-      setError('');
-      
-      const data = await ReservationsService.getById(id);
-      setReservation(data);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar reserva';
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    refreshReservation();
-  }, [refreshReservation]);
-
-  return {
-    reservation,
-    isLoading,
-    error,
-    refreshReservation,
   };
 };
