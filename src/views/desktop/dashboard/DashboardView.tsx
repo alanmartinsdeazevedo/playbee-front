@@ -20,77 +20,39 @@ import {
   People as PeopleIcon,
   AccessTime as AccessTimeIcon,
   Refresh as RefreshIcon,
+  Schedule as ScheduleIcon,
+  TrendingUp as TrendingUpIcon,
+  Today as TodayIcon,
+  DateRange as WeekIcon,
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { AuthService } from '@/lib/auth';
-import { UserService } from '@/services/user.service';
-import type { User } from '@/types/auth';
-
-interface DashboardStats {
-  totalUsers: number;
-  totalCourts: number;
-  todayReservations: number;
-  nextReservation: string;
-}
+import { useDashboard } from '@/hooks/useDashboard';
 
 export const DashboardView = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState<DashboardStats>({
-    totalUsers: 0,
-    totalCourts: 12,
-    todayReservations: 8,
-    nextReservation: '14:00'
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string>("");
   const [isMounted, setIsMounted] = useState(false);
-
   const router = useRouter();
-
-  const loadDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      setError("");
-
-      // Verificar se está autenticado
-      const currentUser = AuthService.getUser();
-      if (!currentUser) {
-        router.push('/desktop/login');
-        return;
-      }
-      setUser(currentUser);
-
-      // Carregar dados do dashboard com fallback seguro
-      try {
-        const users = await UserService.getAll();
-        setStats(prev => ({
-          ...prev,
-          totalUsers: Array.isArray(users) ? users.length : 0
-        }));
-      } catch (userError) {
-        console.warn('Erro ao carregar usuários:', userError);
-        // Manter valores padrão em caso de erro
-      }
-
-    } catch (err) {
-      console.error('Erro ao carregar dashboard:', err);
-      setError('Erro ao carregar dados do dashboard');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  
+  const { 
+    user, 
+    stats, 
+    isLoading, 
+    error, 
+    refreshData, 
+    clearError, 
+    isAdmin 
+  } = useDashboard();
 
   useEffect(() => {
     setIsMounted(true);
-    loadDashboardData();
-  }, [router]);
+  }, []);
 
   const handleLogout = () => {
     AuthService.logout();
   };
 
   const handleRefresh = () => {
-    loadDashboardData();
+    refreshData();
   };
 
   // Aguardar montagem para evitar hidratação
@@ -137,32 +99,74 @@ export const DashboardView = () => {
     );
   }
 
-  const dashboardCards = [
-    {
-      title: 'Usuários Cadastrados',
-      value: (stats.totalUsers || 0).toString(),
-      icon: <PeopleIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
-      color: 'primary.main',
-    },
-    {
-      title: 'Quadras Disponíveis',
-      value: (stats.totalCourts || 0).toString(),
-      icon: <SportsIcon sx={{ fontSize: 40, color: 'success.main' }} />,
-      color: 'success.main',
-    },
-    {
-      title: 'Reservas Hoje',
-      value: (stats.todayReservations || 0).toString(),
-      icon: <CalendarIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
-      color: 'warning.main',
-    },
-    {
-      title: 'Próxima Reserva',
-      value: stats.nextReservation || '--:--',
-      icon: <AccessTimeIcon sx={{ fontSize: 40, color: 'info.main' }} />,
-      color: 'info.main',
-    },
-  ];
+  // Configurar cards baseado no papel do usuário
+  const getDashboardCards = () => {
+    if (isAdmin) {
+      return [
+        {
+          title: 'Usuários Cadastrados',
+          value: (stats.totalUsers || 0).toString(),
+          icon: <PeopleIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
+          color: 'primary.main',
+          path: '/desktop/users',
+        },
+        {
+          title: 'Quadras Disponíveis',
+          value: (stats.totalCourts || 0).toString(),
+          icon: <SportsIcon sx={{ fontSize: 40, color: 'success.main' }} />,
+          color: 'success.main',
+          path: '/desktop/courts',
+        },
+        {
+          title: 'Total de Reservas',
+          value: (stats.totalReservations || 0).toString(),
+          icon: <CalendarIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
+          color: 'warning.main',
+          path: '/desktop/reservations',
+        },
+        {
+          title: 'Próximas Reservas',
+          value: (stats.upcomingReservations || 0).toString(),
+          icon: <ScheduleIcon sx={{ fontSize: 40, color: 'info.main' }} />,
+          color: 'info.main',
+          path: '/desktop/reservations',
+        },
+      ];
+    } else {
+      return [
+        {
+          title: 'Minhas Reservas',
+          value: (stats.myReservations || 0).toString(),
+          icon: <CalendarIcon sx={{ fontSize: 40, color: 'primary.main' }} />,
+          color: 'primary.main',
+          path: '/desktop/reservations',
+        },
+        {
+          title: 'Próximas Reservas',
+          value: (stats.upcomingReservations || 0).toString(),
+          icon: <ScheduleIcon sx={{ fontSize: 40, color: 'success.main' }} />,
+          color: 'success.main',
+          path: '/desktop/reservations',
+        },
+        {
+          title: 'Reservas Hoje',
+          value: (stats.todayReservations || 0).toString(),
+          icon: <TodayIcon sx={{ fontSize: 40, color: 'warning.main' }} />,
+          color: 'warning.main',
+          path: '/desktop/reservations',
+        },
+        {
+          title: 'Próxima Reserva',
+          value: stats.nextReservation || '--:--',
+          icon: <AccessTimeIcon sx={{ fontSize: 40, color: 'info.main' }} />,
+          color: 'info.main',
+          path: '/desktop/reservations',
+        },
+      ];
+    }
+  };
+
+  const dashboardCards = getDashboardCards();
 
   return (
     <Container maxWidth="xl">
@@ -177,14 +181,21 @@ export const DashboardView = () => {
       >
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
-            Dashboard
+            {isAdmin ? 'Dashboard Administrativo' : 'Meu Dashboard'}
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Bem-vindo de volta, {user?.nome || 'Usuário'}! 👋
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Última atualização: {new Date().toLocaleTimeString('pt-BR')}
-          </Typography>
+          <Box display="flex" alignItems="center" gap={1} mt={1}>
+            <Chip 
+              label={isAdmin ? 'Administrador' : 'Usuário'} 
+              color={isAdmin ? 'error' : 'primary'} 
+              size="small" 
+            />
+            <Typography variant="caption" color="text.secondary">
+              Última atualização: {new Date().toLocaleTimeString('pt-BR')}
+            </Typography>
+          </Box>
         </Box>
         
         <Stack direction="row" spacing={2}>
@@ -222,12 +233,14 @@ export const DashboardView = () => {
               key={index} 
               sx={{ 
                 height: '100%',
+                cursor: 'pointer',
                 transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
                 '&:hover': {
                   transform: 'translateY(-4px)',
                   boxShadow: 4,
                 }
               }}
+              onClick={() => router.push(card.path)}
             >
               <CardContent sx={{ p: 3 }}>
                 <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -263,7 +276,10 @@ export const DashboardView = () => {
               Ações Rápidas
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Acesse rapidamente as principais funcionalidades
+              {isAdmin 
+                ? 'Acesse rapidamente as principais funcionalidades administrativas'
+                : 'Acesse rapidamente suas funcionalidades'
+              }
             </Typography>
             <Stack spacing={2}>
               <Button
@@ -273,7 +289,7 @@ export const DashboardView = () => {
                 fullWidth
                 size="large"
               >
-                Ver Quadras Disponíveis
+                {isAdmin ? 'Gerenciar Quadras' : 'Ver Quadras Disponíveis'}
               </Button>
               <Button
                 variant="outlined"
@@ -282,17 +298,29 @@ export const DashboardView = () => {
                 fullWidth
                 size="large"
               >
-                Gerenciar Reservas
+                {isAdmin ? 'Gerenciar Reservas' : 'Minhas Reservas'}
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<PeopleIcon />}
-                onClick={() => router.push('/desktop/users')}
-                fullWidth
-                size="large"
-              >
-                Usuários do Sistema
-              </Button>
+              {isAdmin ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<PeopleIcon />}
+                  onClick={() => router.push('/desktop/users')}
+                  fullWidth
+                  size="large"
+                >
+                  Gerenciar Usuários
+                </Button>
+              ) : (
+                <Button
+                  variant="outlined"
+                  startIcon={<CalendarIcon />}
+                  onClick={() => router.push('/desktop/reservations/new')}
+                  fullWidth
+                  size="large"
+                >
+                  Fazer Nova Reserva
+                </Button>
+              )}
             </Stack>
           </CardContent>
         </Card>
@@ -300,47 +328,96 @@ export const DashboardView = () => {
         <Card sx={{ height: '100%' }}>
           <CardContent sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom fontWeight="bold">
-              Status do Sistema
+              {isAdmin ? 'Status do Sistema' : 'Resumo da Conta'}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Informações sobre o funcionamento da aplicação
+              {isAdmin 
+                ? 'Informações sobre o funcionamento da aplicação'
+                : 'Informações sobre sua atividade'
+              }
             </Typography>
             <Stack spacing={2}>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">
-                    Backend API
-                  </Typography>
-                  <Chip label="Online" color="success" size="small" />
-                </Box>
-              </Paper>
-              
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">
-                    Usuários Cadastrados
-                  </Typography>
-                  <Chip label={stats.totalUsers || 0} color="primary" size="small" />
-                </Box>
-              </Paper>
-              
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">
-                    PWA Status
-                  </Typography>
-                  <Chip label="Ativo" color="info" size="small" />
-                </Box>
-              </Paper>
-              
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="center">
-                  <Typography variant="body2">
-                    Versão
-                  </Typography>
-                  <Chip label="Desktop v1.0" variant="outlined" size="small" />
-                </Box>
-              </Paper>
+              {isAdmin ? (
+                <>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Backend API
+                      </Typography>
+                      <Chip label="Online" color="success" size="small" />
+                    </Box>
+                  </Paper>
+                  
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Usuários Ativos
+                      </Typography>
+                      <Chip label={stats.totalUsers || 0} color="primary" size="small" />
+                    </Box>
+                  </Paper>
+                  
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Quadras Cadastradas
+                      </Typography>
+                      <Chip label={stats.totalCourts || 0} color="info" size="small" />
+                    </Box>
+                  </Paper>
+                  
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Total de Reservas
+                      </Typography>
+                      <Chip label={stats.totalReservations || 0} color="warning" size="small" />
+                    </Box>
+                  </Paper>
+                </>
+              ) : (
+                <>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Reservas Agendadas
+                      </Typography>
+                      <Chip label={stats.upcomingReservations || 0} color="primary" size="small" />
+                    </Box>
+                  </Paper>
+                  
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Reservas Hoje
+                      </Typography>
+                      <Chip label={stats.todayReservations || 0} color="warning" size="small" />
+                    </Box>
+                  </Paper>
+                  
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Reservas Esta Semana
+                      </Typography>
+                      <Chip label={stats.thisWeekReservations || 0} color="info" size="small" />
+                    </Box>
+                  </Paper>
+                  
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <Typography variant="body2">
+                        Próxima Reserva
+                      </Typography>
+                      <Chip 
+                        label={stats.nextReservation || 'Nenhuma'} 
+                        color={stats.nextReservation ? "success" : "default"} 
+                        size="small" 
+                      />
+                    </Box>
+                  </Paper>
+                </>
+              )}
             </Stack>
           </CardContent>
         </Card>

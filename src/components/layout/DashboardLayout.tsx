@@ -30,8 +30,8 @@ import {
   People as PeopleIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
-  ChevronLeft as ChevronLeftIcon,
   Person as PersonIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { AuthService } from '@/lib/auth';
 import type { User } from '@/types/auth';
@@ -47,6 +47,7 @@ interface NavItem {
   icon: React.ReactNode;
   path: string;
   badge?: string;
+  adminOnly?: boolean;
 }
 
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
@@ -58,6 +59,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const pathname = usePathname();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isAdmin = user?.role === 'ADMIN';
 
   useEffect(() => {
     // Verificar autenticação e carregar usuário
@@ -69,7 +71,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     setUser(currentUser);
   }, [router]);
 
-  const navItems: NavItem[] = [
+  const allNavItems: NavItem[] = [
     { 
       text: 'Dashboard', 
       icon: <DashboardIcon />, 
@@ -78,19 +80,18 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { 
       text: 'Quadras', 
       icon: <SportsIcon />, 
-      path: '/desktop/courts',
-      badge: '12'
+      path: '/desktop/courts'
     },
     { 
-      text: 'Reservas', 
+      text: isAdmin ? 'Gerenciar Reservas' : 'Minhas Reservas', 
       icon: <CalendarIcon />, 
-      path: '/desktop/reservations',
-      badge: '3'
+      path: '/desktop/reservations'
     },
     { 
       text: 'Usuários', 
       icon: <PeopleIcon />, 
-      path: '/desktop/users' 
+      path: '/desktop/users',
+      adminOnly: true
     },
     { 
       text: 'Configurações', 
@@ -98,6 +99,9 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       path: '/desktop/settings' 
     },
   ];
+
+  // Filtrar itens baseado no papel do usuário
+  const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -144,6 +148,33 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </Box>
       </Toolbar>
       <Divider />
+      
+      {/* User Info in Drawer */}
+      <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}>
+        <Avatar 
+          sx={{ 
+            bgcolor: isAdmin ? 'error.main' : 'primary.main',
+            width: 40,
+            height: 40,
+            mx: 'auto',
+            mb: 1
+          }}
+        >
+          {user.nome?.charAt(0) || 'U'}
+        </Avatar>
+        <Typography variant="body2" fontWeight="medium" noWrap>
+          {user.nome}
+        </Typography>
+        <Chip 
+          label={isAdmin ? 'Admin' : 'Usuário'} 
+          color={isAdmin ? 'error' : 'primary'}
+          size="small"
+          sx={{ mt: 0.5 }}
+        />
+      </Box>
+      
+      <Divider />
+      
       <List>
         {navItems.map((item) => (
           <ListItem key={item.text} disablePadding>
@@ -214,7 +245,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </IconButton>
           
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            PlayBee Dashboard
+            {isAdmin ? 'PlayBee - Painel Administrativo' : 'PlayBee - Dashboard'}
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -228,15 +259,22 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               {user.nome}
             </Typography>
             <Chip 
-              label={user.role || 'USER'} 
+              label={isAdmin ? 'ADMIN' : 'USER'} 
               size="small" 
-              color={user.role === 'ADMIN' ? 'warning' : 'default'}
-              sx={{ mr: 1, display: { xs: 'none', sm: 'inline-flex' } }}
+              color={isAdmin ? 'error' : 'default'}
+              icon={isAdmin ? <AdminIcon /> : <PersonIcon />}
+              sx={{ 
+                mr: 1, 
+                display: { xs: 'none', sm: 'inline-flex' },
+                color: 'white',
+                borderColor: 'rgba(255,255,255,0.3)'
+              }}
+              variant="outlined"
             />
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
               <Avatar 
                 sx={{ 
-                  bgcolor: 'secondary.main',
+                  bgcolor: isAdmin ? 'error.main' : 'secondary.main',
                   width: 36,
                   height: 36,
                 }}

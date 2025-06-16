@@ -51,13 +51,15 @@ import {
   Schedule as ScheduleIcon,
   Person as PersonIcon,
   LocationOn as LocationIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useReservations } from '@/hooks/useReservations';
 import { useCourts } from '@/hooks/useCourts';
 import { useUsers } from '@/hooks/useUsers';
 import { ReservationsService } from '@/services/reservations.service';
+import { AuthService } from '@/lib/auth';
 import type { Schedule } from '@/types/reservation';
+import type { User } from '@/types/auth';
 
 // Interface expandida para exibição
 interface ReservationDisplay extends Schedule {
@@ -71,10 +73,10 @@ interface ReservationDisplay extends Schedule {
 }
 
 export const DesktopReservationsView = () => {
-  const { reservations, isLoading, error, refreshReservations, deleteReservation, clearError } = useReservations();
   const { courts } = useCourts();
   const { users } = useUsers();
   
+  const [reservations, setReservations] = useState<Schedule[]>([]);
   const [filteredReservations, setFilteredReservations] = useState<ReservationDisplay[]>([]);
   const [selectedTab, setSelectedTab] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
@@ -82,11 +84,56 @@ export const DesktopReservationsView = () => {
   const [selectedUser, setSelectedUser] = useState('');
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedReservation, setSelectedReservation] = useState<ReservationDisplay | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const tabs = ['Todas', 'Próximas', 'Concluídas', 'Canceladas'];
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const tabs = isAdmin ? ['Todas', 'Próximas', 'Concluídas', 'Canceladas'] : ['Minhas Reservas', 'Próximas', 'Concluídas', 'Canceladas'];
+
+  // Carregar dados das reservas baseado no papel do usuário
+  const loadReservations = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+
+      // Verificar autenticação
+      const user = AuthService.getUser();
+      if (!user) {
+        router.push('/desktop/login');
+        return;
+      }
+      setCurrentUser(user);
+
+      let data: Schedule[];
+      
+      if (user.role === 'ADMIN') {
+        // Admin vê todas as reservas
+        console.log('🔍 Admin: Carregando todas as reservas');
+        data = await ReservationsService.getAll();
+      } else {
+        // Usuário comum vê apenas suas reservas
+        console.log('🔍 Usuário comum: Carregando apenas suas reservas');
+        data = await ReservationsService.getByUser(user.id);
+      }
+      
+      console.log('✅ Reservas carregadas:', data.length);
+      setReservations(data);
+    } catch (err) {
+      console.error('❌ Erro ao carregar reservas:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar reservas';
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReservations();
+  }, [router]);
 
   // Transformar dados das reservas para incluir informações adicionais
   const transformReservations = (apiReservations: Schedule[]): ReservationDisplay[] => {
@@ -145,7 +192,7 @@ export const DesktopReservationsView = () => {
       case 3: // Canceladas
         filtered = filtered.filter(r => r.status === 'cancelado' || r.status === 'cancelled');
         break;
-      default: // Todas
+      default: // Todas/Minhas Reservas
         break;
     }
 
@@ -164,8 +211,8 @@ export const DesktopReservationsView = () => {
       filtered = filtered.filter(r => r.courtId === selectedCourt);
     }
 
-    // Filtro por usuário
-    if (selectedUser) {
+    // Filtro por usuário (só para admin)
+    if (selectedUser && isAdmin) {
       filtered = filtered.filter(r => r.userId === selectedUser);
     }
 
@@ -173,7 +220,7 @@ export const DesktopReservationsView = () => {
     filtered.sort((a, b) => new Date(b.dataHoraInicio).getTime() - new Date(a.dataHoraInicio).getTime());
 
     setFilteredReservations(filtered);
-  }, [reservations, courts, users, selectedTab, searchTerm, selectedCourt, selectedUser]);
+  }, [reservations, courts, users, selectedTab, searchTerm, selectedCourt, selectedUser, isAdmin]);
 
   // Mostrar mensagem de sucesso se veio de criação/edição
   useEffect(() => {
@@ -182,7 +229,6 @@ export const DesktopReservationsView = () => {
     const deleted = searchParams.get('deleted');
     
     if (created || updated || deleted) {
-      // Aqui você poderia mostrar uma notificação de sucesso
       console.log('Ação realizada:', { created, updated, deleted });
     }
   }, [searchParams]);
@@ -240,8 +286,8 @@ export const DesktopReservationsView = () => {
   };
 
   const handleRefresh = () => {
-    clearError();
-    refreshReservations();
+    setError('');
+    loadReservations();
   };
 
   const handleDeleteReservation = async (reservation: ReservationDisplay) => {
@@ -250,13 +296,12 @@ export const DesktopReservationsView = () => {
     }
 
     try {
-      const success = await deleteReservation(reservation.id);
-      
-      if (success) {
-        console.log('✅ Reserva excluída com sucesso');
-      }
+      await ReservationsService.delete(reservation.id);
+      console.log('✅ Reserva excluída com sucesso');
+      await loadReservations(); // Recarregar dados
     } catch (err) {
       console.error('❌ Erro ao excluir reserva:', err);
+      setError('Erro ao excluir reserva');
     }
     
     handleMenuClose();
@@ -347,14 +392,27 @@ export const DesktopReservationsView = () => {
       >
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
-            Reservas
+            {isAdmin ? 'Gerenciar Reservas' : 'Minhas Reservas'}
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Gerencie todas as reservas do sistema
+            {isAdmin 
+              ? 'Gerencie todas as reservas do sistema' 
+              : 'Visualize e gerencie suas reservas'
+            }
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {upcomingCount} próximas • {completedCount} concluídas • {cancelledCount} canceladas
-          </Typography>
+          <Box display="flex" alignItems="center" gap={1} mt={1}>
+            {isAdmin && (
+              <Chip 
+                label="Modo Administrador" 
+                color="error" 
+                size="small" 
+                icon={<AdminIcon />}
+              />
+            )}
+            <Typography variant="caption" color="text.secondary">
+              {upcomingCount} próximas • {completedCount} concluídas • {cancelledCount} canceladas
+            </Typography>
+          </Box>
         </Box>
         
         <Stack direction="row" spacing={2}>
@@ -432,7 +490,7 @@ export const DesktopReservationsView = () => {
         <Alert 
           severity="error" 
           sx={{ mb: 3 }}
-          onClose={clearError}
+          onClose={() => setError('')}
           action={
             <Button color="inherit" size="small" onClick={handleRefresh}>
               Tentar Novamente
@@ -494,21 +552,23 @@ export const DesktopReservationsView = () => {
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Filtrar por Usuário</InputLabel>
-              <Select
-                value={selectedUser}
-                onChange={(e) => setSelectedUser(e.target.value)}
-                label="Filtrar por Usuário"
-              >
-                <MenuItem value="">Todos os Usuários</MenuItem>
-                {users.map((user) => (
-                  <MenuItem key={user.id} value={user.id}>
-                    {user.nome}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            {isAdmin && (
+              <FormControl size="small" sx={{ minWidth: 200 }}>
+                <InputLabel>Filtrar por Usuário</InputLabel>
+                <Select
+                  value={selectedUser}
+                  onChange={(e) => setSelectedUser(e.target.value)}
+                  label="Filtrar por Usuário"
+                >
+                  <MenuItem value="">Todos os Usuários</MenuItem>
+                  {users.map((user) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {user.nome}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Stack>
         </Box>
       </Paper>
@@ -520,7 +580,7 @@ export const DesktopReservationsView = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Quadra</TableCell>
-                <TableCell>Usuário</TableCell>
+                {isAdmin && <TableCell>Usuário</TableCell>}
                 <TableCell>Data & Hora</TableCell>
                 <TableCell>Duração</TableCell>
                 <TableCell>Status</TableCell>
@@ -556,19 +616,21 @@ export const DesktopReservationsView = () => {
                     </Box>
                   </TableCell>
                   
-                  <TableCell>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Box>
-                        <Typography variant="body2" fontWeight="medium">
-                          {reservation.userName}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {reservation.userEmail}
-                        </Typography>
+                  {isAdmin && (
+                    <TableCell>
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                        <Box>
+                          <Typography variant="body2" fontWeight="medium">
+                            {reservation.userName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {reservation.userEmail}
+                          </Typography>
+                        </Box>
                       </Box>
-                    </Box>
-                  </TableCell>
+                    </TableCell>
+                  )}
                   
                   <TableCell>
                     <Box>
@@ -611,7 +673,9 @@ export const DesktopReservationsView = () => {
                         </IconButton>
                       </Tooltip>
                       
-                      {!['cancelado', 'cancelled', 'concluido', 'completed'].includes(reservation.status) && (
+                      {/* Só pode editar se for admin ou se for sua própria reserva */}
+                      {(isAdmin || reservation.userId === currentUser?.id) && 
+                       !['cancelado', 'cancelled', 'concluido', 'completed'].includes(reservation.status) && (
                         <Tooltip title="Editar">
                           <IconButton 
                             size="small" 
@@ -653,7 +717,9 @@ export const DesktopReservationsView = () => {
               ? 'Nenhuma reserva foi cancelada'
               : searchTerm || selectedCourt || selectedUser
               ? 'Tente ajustar os filtros ou criar uma nova reserva'
-              : 'Comece criando a primeira reserva'
+              : isAdmin 
+              ? 'Nenhuma reserva encontrada no sistema'
+              : 'Você ainda não tem reservas. Comece criando a primeira!'
             }
           </Typography>
           <Button 
@@ -688,7 +754,9 @@ export const DesktopReservationsView = () => {
           <ListItemText>Ver Detalhes</ListItemText>
         </MenuItem>
         
-        {selectedReservation && !['cancelado', 'cancelled', 'concluido', 'completed'].includes(selectedReservation.status) && (
+        {selectedReservation && 
+         (isAdmin || selectedReservation.userId === currentUser?.id) &&
+         !['cancelado', 'cancelled', 'concluido', 'completed'].includes(selectedReservation.status) && (
           <MenuItem onClick={() => {
             if (selectedReservation) {
               router.push(`/desktop/reservations/${selectedReservation.id}/edit`);
@@ -702,19 +770,22 @@ export const DesktopReservationsView = () => {
           </MenuItem>
         )}
         
-        <MenuItem 
-          onClick={() => {
-            if (selectedReservation) {
-              handleDeleteReservation(selectedReservation);
-            }
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText>Excluir Reserva</ListItemText>
-        </MenuItem>
+        {/* Só pode excluir se for admin ou se for sua própria reserva */}
+        {selectedReservation && (isAdmin || selectedReservation.userId === currentUser?.id) && (
+          <MenuItem 
+            onClick={() => {
+              if (selectedReservation) {
+                handleDeleteReservation(selectedReservation);
+              }
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText>Excluir Reserva</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
     </Container>
   );

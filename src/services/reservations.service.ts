@@ -179,9 +179,33 @@ export class ReservationsService {
 
   static async getByUser(userId: string): Promise<Schedule[]> {
     try {
+      console.log('🔍 Buscando reservas do usuário:', userId);
+      
+      // Primeiro tentar buscar com filtro de userId na API
+      try {
+        const response = await api.get<any>(`/schedule?userId=${userId}`);
+        
+        if (response && typeof response === 'object') {
+          if ('schedules' in response && Array.isArray(response.schedules)) {
+            console.log('✅ Reservas encontradas via API:', response.schedules.length);
+            return response.schedules;
+          }
+          if (Array.isArray(response)) {
+            console.log('✅ Reservas encontradas (array direto):', response.length);
+            return response;
+          }
+        }
+      } catch (apiError) {
+        console.warn('Endpoint com filtro userId não disponível, usando fallback');
+      }
+      
+      // Fallback: buscar todas e filtrar no frontend
       const allReservations = await this.getAll();
-      return allReservations.filter(reservation => reservation.userId === userId);
+      const userReservations = allReservations.filter(reservation => reservation.userId === userId);
+      console.log('✅ Reservas filtradas no frontend:', userReservations.length);
+      return userReservations;
     } catch (error) {
+      console.error('Erro ao buscar reservas do usuário:', error);
       return [];
     }
   }

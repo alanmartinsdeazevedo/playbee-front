@@ -44,7 +44,6 @@ export class AuthService {
     if (typeof window === 'undefined') return;
     
     document.cookie = `${this.TOKEN_KEY}=; path=/; max-age=0`;
-    
     localStorage.removeItem(this.USER_KEY);
   }
 
@@ -74,7 +73,6 @@ export class AuthService {
     } catch (error) {
       console.error('Erro no login:', error);
       
-      // Tratar erros
       if (error instanceof Error) {
         if (error.message.includes('Email ou senha incorretos')) {
           throw new Error('Email ou senha incorretos');
@@ -151,8 +149,7 @@ export class AuthService {
   // Logout
   static logout(): void {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(this.TOKEN_KEY);
-      localStorage.removeItem(this.USER_KEY);
+      this.removeAuth();
       
       const userAgent = navigator.userAgent;
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || window.innerWidth <= 768;
@@ -221,12 +218,58 @@ export class AuthService {
     return false;
   }
 
+  static isAdmin(): boolean {
+    const user = this.getUser();
+    return user?.role === 'ADMIN';
+  }
+
+  static isUser(): boolean {
+    const user = this.getUser();
+    return user?.role === 'USER' || user?.role === 'ADMIN';
+  }
+
   static getAuthState() {
     return {
       user: this.getUser(),
       token: this.getToken(),
       isAuthenticated: this.isAuthenticated(),
       isTokenValid: this.isTokenValid(),
+      isAdmin: this.isAdmin(),
     };
+  }
+
+  static canAccessAdminFeatures(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  static canManageUsers(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  static canManageAllReservations(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  static canCreateReservations(): boolean {
+    return this.isAuthenticated();
+  }
+
+  static canManageOwnReservations(): boolean {
+    return this.isAuthenticated();
+  }
+
+  static getUserDisplayName(): string {
+    const user = this.getUser();
+    return user?.nome || 'Usuário';
+  }
+
+  static getUserRole(): string {
+    const user = this.getUser();
+    return user?.role || 'USER';
+  }
+
+  static getUserId(): string | null {
+    const user = this.getUser();
+    return user?.id || null;
   }
 }
