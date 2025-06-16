@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -34,48 +34,84 @@ import {
   Cancel as CancelIcon,
   CheckCircle as CheckCircleIcon,
   Schedule as ScheduleIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
-
-// Mock data - em produção viria dos hooks
-const mockReservation = {
-  id: '1',
-  dataHoraInicio: '2025-06-15T14:00:00.000Z',
-  dataHoraFim: '2025-06-15T16:00:00.000Z',
-  status: 'agendado',
-  userId: '1',
-  courtId: '1',
-  createdAt: '2025-06-13T10:00:00.000Z',
-  updatedAt: '2025-06-13T10:00:00.000Z',
-};
-
-const mockCourt = {
-  id: '1',
-  nome: 'Quadra Central',
-  tipo: 'Futebol',
-  localizacao: 'Centro',
-};
-
-const mockUser = {
-  id: '1',
-  name: 'João Silva',
-  email: 'joao@email.com',
-};
+import { useReservation, useReservations } from '@/hooks/useReservations';
+import { useCourts } from '@/hooks/useCourts';
+import { useUsers } from '@/hooks/useUsers';
+import { AuthService } from '@/lib/auth';
+import type { User } from '@/types/auth';
 
 export const DesktopReservationDetailsView = () => {
   const router = useRouter();
   const params = useParams();
   const reservationId = params.id as string;
 
+  // Hooks para buscar dados reais
+  const { reservation, isLoading: isLoadingReservation, error: loadError, refreshReservation } = useReservation(reservationId);
+  const { deleteReservation, updateReservation } = useReservations();
+  const { courts } = useCourts();
+  const { users } = useUsers();
+
+  // Estados locais
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  // Em produção, usar hooks reais
-  const reservation = mockReservation;
-  const court = mockCourt;
-  const user = mockUser;
-  const error = '';
+  // Buscar informações da quadra e usuário baseado na reserva
+  const court = reservation ? courts.find(c => c.id === reservation.courtId) : null;
+  const user = reservation ? users.find(u => u.id === reservation.userId) : null;
+
+  // Verificar permissões
+  useEffect(() => {
+    const authUser = AuthService.getUser();
+    setCurrentUser(authUser);
+  }, []);
+
+  const canEdit = () => {
+    if (!reservation || !currentUser) return false;
+    
+    // Admin pode editar qualquer reserva
+    if (currentUser.role === 'ADMIN') return true;
+    
+    // Usuário pode editar apenas suas próprias reservas
+    if (reservation.userId === currentUser.id) {
+      // Não pode editar se estiver cancelado ou concluído
+      const status = reservation.status.toLowerCase();
+      if (status === 'cancelado' || status === 'concluido') return false;
+      
+      // Não pode editar se o horário já passou
+      const now = new Date();
+      const reservationStart = new Date(reservation.dataHoraInicio);
+      return now < reservationStart;
+    }
+    
+    return false;
+  };
+
+  const canDelete = () => {
+    if (!reservation || !currentUser) return false;
+    
+    // Admin pode excluir qualquer reserva
+    if (currentUser.role === 'ADMIN') return true;
+    
+    // Usuário pode excluir apenas suas próprias reservas
+    return reservation.userId === currentUser.id;
+  };
+
+  const canCancel = () => {
+    if (!reservation || !currentUser) return false;
+    
+    // Só pode cancelar se for dono da reserva ou admin
+    const isOwnerOrAdmin = currentUser.role === 'ADMIN' || reservation.userId === currentUser.id;
+    if (!isOwnerOrAdmin) return false;
+    
+    // Só pode cancelar se estiver agendado ou confirmado
+    const status = reservation.status.toLowerCase();
+    return status === 'agendado' || status === 'confirmado';
+  };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -97,10 +133,10 @@ export const DesktopReservationDetailsView = () => {
 
     setIsDeleting(true);
     try {
-      // TODO: Implementar exclusão usando useReservations
-      console.log('Excluindo reserva:', reservationId);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular API
-      router.push('/desktop/reservations?deleted=true');
+      const success = await deleteReservation(reservationId);
+      if (success) {
+        router.push('/desktop/reservations?deleted=true');
+      }
     } catch (err) {
       console.error('Erro ao excluir reserva:', err);
     } finally {
@@ -114,12 +150,16 @@ export const DesktopReservationDetailsView = () => {
       return;
     }
 
+    setIsCancelling(true);
     try {
-      // TODO: Implementar cancelamento usando useReservations
-      console.log('Cancelando reserva:', reservationId);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simular API
+      const success = await updateReservation(reservationId, { status: 'cancelado' });
+      if (success) {
+        refreshReservation(); // Atualizar dados na tela
+      }
     } catch (err) {
       console.error('Erro ao cancelar reserva:', err);
+    } finally {
+      setIsCancelling(false);
     }
     handleMenuClose();
   };
@@ -177,6 +217,21 @@ export const DesktopReservationDetailsView = () => {
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'agendado':
+        return 'Agendado';
+      case 'confirmado':
+        return 'Confirmado';
+      case 'concluido':
+        return 'Concluído';
+      case 'cancelado':
+        return 'Cancelado';
+      default:
+        return status;
+    }
+  };
+
   const getSportEmoji = (tipo: string): string => {
     const lowerTipo = tipo.toLowerCase();
     if (lowerTipo.includes('futebol') || lowerTipo.includes('futsal')) return '⚽';
@@ -186,7 +241,7 @@ export const DesktopReservationDetailsView = () => {
     return '🏟️';
   };
 
-  if (isLoading) {
+  if (isLoadingReservation) {
     return (
       <Container maxWidth="lg">
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="50vh">
@@ -196,11 +251,11 @@ export const DesktopReservationDetailsView = () => {
     );
   }
 
-  if (error || !reservation) {
+  if (loadError || !reservation) {
     return (
       <Container maxWidth="lg">
         <Alert severity="error" sx={{ mb: 3 }}>
-          {error || 'Reserva não encontrada'}
+          {loadError || 'Reserva não encontrada'}
         </Alert>
         <Button 
           startIcon={<ArrowBackIcon />}
@@ -213,7 +268,6 @@ export const DesktopReservationDetailsView = () => {
   }
 
   const duration = calculateDuration();
-  const canEdit = reservation.status.toLowerCase() === 'agendado' || reservation.status.toLowerCase() === 'confirmado';
 
   return (
     <Container maxWidth="lg">
@@ -249,7 +303,7 @@ export const DesktopReservationDetailsView = () => {
             variant="outlined"
             startIcon={<EditIcon />}
             onClick={handleEdit}
-            disabled={!canEdit}
+            disabled={!canEdit()}
           >
             Editar
           </Button>
@@ -265,126 +319,119 @@ export const DesktopReservationDetailsView = () => {
 
       <Grid container spacing={4}>
         {/* Main Details */}
-        <Grid size= {{ xs:12, md:8 }}>
+        <Grid size={{ xs: 12, md: 8 }}>
           <Stack spacing={3}>
-            {/* Status Card */}
-            <Card>
-              <CardContent sx={{ textAlign: 'center', py: 4 }}>
-                <Avatar 
-                  sx={{ 
-                    width: 80, 
-                    height: 80, 
-                    bgcolor: `${getStatusColor(reservation.status)}.main`,
-                    mx: 'auto',
-                    mb: 2
-                  }}
-                >
-                  {getStatusIcon(reservation.status)}
-                </Avatar>
-                <Typography variant="h5" fontWeight="bold" gutterBottom>
-                  Reserva {reservation.status}
-                </Typography>
-                <Chip 
-                  label={reservation.status}
-                  color={getStatusColor(reservation.status) as any}
-                  size="medium"
-                  sx={{ fontSize: '1rem', py: 2 }}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Court Information */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <SportsIcon color="primary" />
-                  Informações da Quadra
-                </Typography>
-                <Box display="flex" alignItems="center" gap={2} mt={2}>
-                  <Avatar sx={{ bgcolor: 'primary.main', fontSize: '1.5rem' }}>
-                    {getSportEmoji(court.tipo)}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" fontWeight="bold">
-                      {court.nome}
-                    </Typography>
-                    <Box display="flex" alignItems="center" gap={1} mt={0.5}>
-                      <SportsIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {court.tipo}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">•</Typography>
-                      <LocationIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2" color="text.secondary">
-                        {court.localizacao}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {/* Date & Time Information */}
+            {/* Reservation Info */}
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CalendarIcon color="primary" />
-                  Data e Horário
+                  Informações da Reserva
                 </Typography>
+                
                 <Grid container spacing={3} sx={{ mt: 1 }}>
-                  <Grid size= {{ xs:12, sm:6 }}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <CalendarIcon sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
-                      <Typography variant="h6" fontWeight="bold">
-                        {formatDate(reservation.dataHoraInicio)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Data da Reserva
-                      </Typography>
-                    </Paper>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Data da Reserva
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold">
+                      {formatDate(reservation.dataHoraInicio)}
+                    </Typography>
                   </Grid>
-                  <Grid size= {{ xs:12, sm:6 }}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center' }}>
-                      <AccessTimeIcon sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
-                      <Typography variant="h6" fontWeight="bold">
-                        {formatTime(reservation.dataHoraInicio)} - {formatTime(reservation.dataHoraFim)}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        Duração: {duration}h
-                      </Typography>
-                    </Paper>
+                  
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Horário
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold">
+                      {formatTime(reservation.dataHoraInicio)} às {formatTime(reservation.dataHoraFim)}
+                    </Typography>
+                  </Grid>
+                  
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Duração
+                    </Typography>
+                    <Typography variant="h6" fontWeight="bold">
+                      {duration} {duration === 1 ? 'hora' : 'horas'}
+                    </Typography>
+                  </Grid>
+                  
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Box mt={1}>
+                      <Chip 
+                        icon={getStatusIcon(reservation.status)}
+                        label={getStatusText(reservation.status)}
+                        color={getStatusColor(reservation.status) as any}
+                        variant="filled"
+                      />
+                    </Box>
                   </Grid>
                 </Grid>
               </CardContent>
             </Card>
 
-            {/* User Information */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PersonIcon color="primary" />
-                  Informações do Usuário
-                </Typography>
-                <Box display="flex" alignItems="center" gap={2} mt={2}>
-                  <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                    {user.name.charAt(0)}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h6" fontWeight="bold">
-                      {user.name}
+            {/* Court Info */}
+            {court && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <SportsIcon color="primary" />
+                    Informações da Quadra
+                  </Typography>
+                  <Box display="flex" alignItems="center" gap={2} mt={2}>
+                    <Typography variant="h4">
+                      {getSportEmoji(court.tipo)}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {user.email}
-                    </Typography>
+                    <Box>
+                      <Typography variant="h6" fontWeight="bold">
+                        {court.nome}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {court.tipo}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <LocationIcon fontSize="small" />
+                        {court.localizacao}
+                      </Typography>
+                    </Box>
                   </Box>
-                </Box>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* User Info */}
+            {user && (
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PersonIcon color="primary" />
+                    Informações do Usuário
+                  </Typography>
+                  <Box display="flex" alignItems="center" gap={2} mt={2}>
+                    <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                      {user.nome.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" fontWeight="bold">
+                        {user.nome}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {user.email}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            )}
           </Stack>
         </Grid>
 
         {/* Sidebar */}
-        <Grid size= {{ xs:12, md:4 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
           <Stack spacing={3}>
             {/* Quick Actions */}
             <Card>
@@ -397,115 +444,67 @@ export const DesktopReservationDetailsView = () => {
                     variant="outlined"
                     startIcon={<EditIcon />}
                     onClick={handleEdit}
-                    disabled={!canEdit}
+                    disabled={!canEdit()}
                     fullWidth
                   >
                     Editar Reserva
                   </Button>
-                  {canEdit && (
+                  {canCancel() && (
                     <Button
                       variant="outlined"
                       color="warning"
                       startIcon={<CancelIcon />}
                       onClick={handleCancel}
+                      disabled={isCancelling}
                       fullWidth
                     >
-                      Cancelar Reserva
+                      {isCancelling ? 'Cancelando...' : 'Cancelar Reserva'}
                     </Button>
                   )}
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<DeleteIcon />}
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    fullWidth
-                  >
-                    {isDeleting ? 'Excluindo...' : 'Excluir Reserva'}
-                  </Button>
+                  {canDelete() && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={handleDelete}
+                      disabled={isDeleting}
+                      fullWidth
+                    >
+                      {isDeleting ? 'Excluindo...' : 'Excluir'}
+                    </Button>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
 
-            {/* Pricing */}
+            {/* Reservation Timeline */}
             <Card>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  Informações de Pagamento
-                </Typography>
-                <Stack spacing={1}>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2" color="text.secondary">
-                      Valor por hora:
-                    </Typography>
-                    <Typography variant="body2" fontWeight="bold">
-                      R$ 80,00
-                    </Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="body2" color="text.secondary">
-                      Duração:
-                    </Typography>
-                    <Typography variant="body2">
-                      {duration}h
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  <Box display="flex" justifyContent="space-between">
-                    <Typography variant="h6" color="primary.main">
-                      Total:
-                    </Typography>
-                    <Typography variant="h6" color="primary.main" fontWeight="bold">
-                      R$ {(duration * 80).toFixed(2)}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </CardContent>
-            </Card>
-
-            {/* Timeline */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
-                  Informações Técnicas
+                  Linha do Tempo
                 </Typography>
                 <Stack spacing={2}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
                       Criada em
                     </Typography>
-                    <Typography variant="body2">
-                      {new Date(reservation.createdAt).toLocaleString('pt-BR')}
+                    <Typography variant="body2" fontWeight="medium">
+                      {formatDate(reservation.createdAt || reservation.dataHoraInicio)}
                     </Typography>
                   </Box>
-                  <Divider />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Última atualização
-                    </Typography>
-                    <Typography variant="body2">
-                      {new Date(reservation.updatedAt).toLocaleString('pt-BR')}
-                    </Typography>
-                  </Box>
-                  <Divider />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      Status atual
-                    </Typography>
-                    <Typography variant="body2">
-                      {reservation.status}
-                    </Typography>
-                  </Box>
+                  {reservation.updatedAt && reservation.updatedAt !== reservation.createdAt && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Última atualização
+                      </Typography>
+                      <Typography variant="body2" fontWeight="medium">
+                        {formatDate(reservation.updatedAt)}
+                      </Typography>
+                    </Box>
+                  )}
                 </Stack>
               </CardContent>
             </Card>
-
-            {/* Help */}
-            <Alert severity="info">
-              <Typography variant="body2">
-                <strong>Precisa de ajuda?</strong> Entre em contato com o suporte se tiver dúvidas sobre sua reserva.
-              </Typography>
-            </Alert>
           </Stack>
         </Grid>
       </Grid>
@@ -519,31 +518,30 @@ export const DesktopReservationDetailsView = () => {
           sx: { minWidth: 200 }
         }}
       >
-        <MenuItem onClick={handleEdit} disabled={!canEdit}>
+        <MenuItem onClick={handleEdit} disabled={!canEdit()}>
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>Editar Reserva</ListItemText>
         </MenuItem>
         
-        {canEdit && (
-          <MenuItem onClick={handleCancel}>
+        {canCancel() && (
+          <MenuItem onClick={handleCancel} disabled={isCancelling}>
             <ListItemIcon>
-              <CancelIcon fontSize="small" />
+              <CancelIcon fontSize="small" color="warning" />
             </ListItemIcon>
             <ListItemText>Cancelar Reserva</ListItemText>
           </MenuItem>
         )}
         
-        <MenuItem 
-          onClick={handleDelete}
-          sx={{ color: 'error.main' }}
-        >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
-          </ListItemIcon>
-          <ListItemText>Excluir Reserva</ListItemText>
-        </MenuItem>
+        {canDelete() && (
+          <MenuItem onClick={handleDelete} disabled={isDeleting} sx={{ color: 'error.main' }}>
+            <ListItemIcon>
+              <DeleteIcon fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText>Excluir Reserva</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
     </Container>
   );

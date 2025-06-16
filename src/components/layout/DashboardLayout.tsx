@@ -1,5 +1,3 @@
-// src/components/layout/DashboardLayout.tsx
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -36,6 +34,9 @@ import {
   Person as PersonIcon,
 } from '@mui/icons-material';
 import { AuthService } from '@/lib/auth';
+import { useCourts } from '@/hooks/useCourts';
+import { useReservations } from '@/hooks/useReservations';
+import { useUsers } from '@/hooks/useUsers';
 import type { User } from '@/types/auth';
 
 const drawerWidth = 240;
@@ -48,7 +49,7 @@ interface NavItem {
   text: string;
   icon: React.ReactNode;
   path: string;
-  badge?: string;
+  badge?: string | number;
 }
 
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
@@ -61,6 +62,11 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  // Hooks para buscar dados reais
+  const { courts } = useCourts();
+  const { reservations } = useReservations();
+  const { users } = useUsers();
+
   useEffect(() => {
     // Verificar autenticação e carregar usuário
     const currentUser = AuthService.getUser();
@@ -71,38 +77,88 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     setUser(currentUser);
   }, [router]);
 
-  const navItems: NavItem[] = [
-    { 
-      text: 'Dashboard', 
-      icon: <DashboardIcon />, 
-      path: '/desktop/dashboard' 
-    },
-    { 
-      text: 'Quadras', 
-      icon: <SportsIcon />, 
-      path: '/desktop/courts',
-      badge: '12'
-    },
-    { 
-      text: 'Reservas', 
-      icon: <CalendarIcon />, 
-      path: '/desktop/reservations',
-      badge: '3'
-    },
-    { 
-      text: 'Usuários', 
-      icon: <PeopleIcon />, 
-      path: '/desktop/users' 
-    },
-    { 
+  // Calcular estatísticas baseadas nos dados reais
+  const getStatistics = () => {
+    const now = new Date();
+    
+    if (!user) return { courtsCount: 0, reservationsCount: 0, upcomingCount: 0 };
+
+    // Filtrar reservas baseado no papel do usuário
+    let userReservations = reservations;
+    if (user.role !== 'ADMIN') {
+      // Usuário comum vê apenas suas próprias reservas
+      userReservations = reservations.filter(r => r.userId === user.id);
+    }
+
+    // Contar reservas próximas (futuras e não canceladas)
+    const upcomingReservations = userReservations.filter(r => {
+      const startTime = new Date(r.dataHoraInicio);
+      const status = r.status.toLowerCase();
+      return startTime >= now && !['cancelado', 'cancelled'].includes(status);
+    });
+
+    return {
+      courtsCount: courts.length,
+      reservationsCount: userReservations.length,
+      upcomingCount: upcomingReservations.length,
+    };
+  };
+
+  const stats = getStatistics();
+
+  // Definir itens de navegação com badges dinâmicos
+  const getNavItems = (): NavItem[] => {
+    const baseItems: NavItem[] = [
+      { 
+        text: 'Dashboard', 
+        icon: <DashboardIcon />, 
+        path: '/desktop/dashboard' 
+      },
+      { 
+        text: 'Quadras', 
+        icon: <SportsIcon />, 
+        path: '/desktop/courts',
+        badge: stats.courtsCount > 0 ? stats.courtsCount : undefined
+      },
+      { 
+        text: 'Reservas', 
+        icon: <CalendarIcon />, 
+        path: '/desktop/reservations',
+        badge: stats.upcomingCount > 0 ? stats.upcomingCount : undefined
+      },
+    ];
+
+    // Adicionar "Usuários" apenas para admins
+    if (user?.role === 'ADMIN') {
+      baseItems.push({
+        text: 'Usuários', 
+        icon: <PeopleIcon />, 
+        path: '/desktop/users',
+        badge: users.length > 0 ? users.length : undefined
+      });
+    }
+
+    // Adicionar Configurações
+    baseItems.push({
       text: 'Configurações', 
       icon: <SettingsIcon />, 
-      path: user ? `/desktop/users/${user.id}/edit` : '/desktop/settings' // ✅ CORREÇÃO: redireciona para editar perfil do usuário logado
-    },
-  ];
+      path: user?.role === 'ADMIN' ? '/desktop/settings' : '/desktop/profile'
+    });
+
+    return baseItems;
+  };
+
+  const navItems = getNavItems();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleNavigation = (path: string) => {
+    router.push(path);
+    if (isMobile) {
+      setMobileOpen(false);
+    }
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -115,63 +171,12 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
 
   const handleLogout = () => {
     AuthService.logout();
+    router.push('/desktop/login');
     handleMenuClose();
   };
 
-  const handleNavigation = (path: string) => {
-    console.log('🔍 Navegando via menu lateral para:', path);
-    console.log('🔍 Rota atual:', pathname);
-    
-    // Se já estamos na rota de destino, forçar reload
-    if (pathname === path) {
-      console.log('✅ Já estamos na rota de destino, forçando reload...');
-      window.location.href = path;
-    } else {
-      router.push(path);
-    }
-    
-    if (isMobile) {
-      setMobileOpen(false);
-    }
-  };
-
-  const handleProfileClick = () => {
-    // ✅ CORREÇÃO: redireciona para página de edição do usuário logado
-    if (user) {
-      console.log('🔍 Navegando para perfil do usuário:', user.id);
-      console.log('🔍 Rota atual:', pathname);
-      console.log('🔍 Rota destino:', `/desktop/users/${user.id}/edit`);
-      
-      const targetRoute = `/desktop/users/${user.id}/edit`;
-      
-      // Se já estamos na rota de destino, forçar reload
-      if (pathname === targetRoute) {
-        console.log('✅ Já estamos na rota de destino, forçando reload...');
-        window.location.href = targetRoute;
-      } else {
-        router.push(targetRoute);
-      }
-    }
-    handleMenuClose();
-  };
-
-  const handleSettingsClick = () => {
-    // ✅ CORREÇÃO: redireciona para página de edição do usuário logado
-    if (user) {
-      console.log('🔍 Navegando para configurações do usuário:', user.id);
-      console.log('🔍 Rota atual:', pathname);
-      console.log('🔍 Rota destino:', `/desktop/users/${user.id}/edit`);
-      
-      const targetRoute = `/desktop/users/${user.id}/edit`;
-      
-      // Se já estamos na rota de destino, forçar reload
-      if (pathname === targetRoute) {
-        console.log('✅ Já estamos na rota de destino, forçando reload...');
-        window.location.href = targetRoute;
-      } else {
-        router.push(targetRoute);
-      }
-    }
+  const handleProfile = () => {
+    router.push('/desktop/profile');
     handleMenuClose();
   };
 
@@ -225,6 +230,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <Chip 
                   label={item.badge} 
                   size="small" 
+                  color={pathname === item.path ? "primary" : "default"}
                   sx={{ 
                     height: 20,
                     '& .MuiChip-label': { fontSize: '0.75rem' }
@@ -269,60 +275,39 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               variant="body2" 
               sx={{ 
                 display: { xs: 'none', sm: 'block' },
-                mr: 1
+                mr: 1 
               }}
             >
               {user.nome}
             </Typography>
-            <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
+            <IconButton
+              size="large"
+              aria-label="account of current user"
+              aria-controls="menu-appbar"
+              aria-haspopup="true"
+              onClick={handleMenuOpen}
+              color="inherit"
+            >
               <Avatar 
                 sx={{ 
+                  width: 32, 
+                  height: 32, 
                   bgcolor: 'secondary.main',
-                  width: 36,
-                  height: 36,
+                  fontSize: '0.875rem'
                 }}
               >
-                {user.nome?.charAt(0) || 'U'}
+                {user.nome.charAt(0)}
               </Avatar>
             </IconButton>
           </Box>
         </Toolbar>
       </AppBar>
 
-      {/* User Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-        sx={{ mt: 1 }}
-      >
-        <MenuItem onClick={handleProfileClick}>
-          <PersonIcon sx={{ mr: 1 }} />
-          Meu Perfil
-        </MenuItem>
-        <MenuItem onClick={handleSettingsClick}>
-          <SettingsIcon sx={{ mr: 1 }} />
-          Configurações
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
-          <LogoutIcon sx={{ mr: 1 }} />
-          Sair
-        </MenuItem>
-      </Menu>
-
       {/* Navigation Drawer */}
       <Box
         component="nav"
         sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+        aria-label="mailbox folders"
       >
         {/* Mobile drawer */}
         <Drawer
@@ -330,28 +315,22 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           open={mobileOpen}
           onClose={handleDrawerToggle}
           ModalProps={{
-            keepMounted: true, // Better open performance on mobile
+            keepMounted: true, // Better open performance on mobile.
           }}
           sx={{
             display: { xs: 'block', md: 'none' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
         >
           {drawerContent}
         </Drawer>
-
+        
         {/* Desktop drawer */}
         <Drawer
           variant="permanent"
           sx={{
             display: { xs: 'none', md: 'block' },
-            '& .MuiDrawer-paper': {
-              boxSizing: 'border-box',
-              width: drawerWidth,
-            },
+            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
           }}
           open
         >
@@ -373,6 +352,52 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         <Toolbar />
         {children}
       </Box>
+
+      {/* User Menu */}
+      <Menu
+        id="menu-appbar"
+        anchorEl={anchorEl}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        keepMounted
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+        PaperProps={{
+          sx: { minWidth: 200 }
+        }}
+      >
+        <Box sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle2" fontWeight="bold">
+            {user.nome}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {user.email}
+          </Typography>
+          <Box mt={0.5}>
+            <Chip 
+              label={user.role === 'ADMIN' ? 'Administrador' : 'Usuário'} 
+              size="small" 
+              color={user.role === 'ADMIN' ? 'primary' : 'default'}
+            />
+          </Box>
+        </Box>
+        
+        <MenuItem onClick={handleProfile}>
+          <PersonIcon sx={{ mr: 2 }} />
+          Meu Perfil
+        </MenuItem>
+        
+        <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
+          <LogoutIcon sx={{ mr: 2 }} />
+          Sair
+        </MenuItem>
+      </Menu>
     </Box>
   );
 };
