@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3003';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 class SimpleApiClient {
   private baseUrl: string;
@@ -80,4 +80,8 @@ class SimpleApiClient {
   }
 }
 
+// Optionally, throw an error if API_BASE_URL is not set
+if (!API_BASE_URL) {
+  throw new Error('NEXT_PUBLIC_API_URL environment variable is not set');
+}
 export const api = new SimpleApiClient(API_BASE_URL);

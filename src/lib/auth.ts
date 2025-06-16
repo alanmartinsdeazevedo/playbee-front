@@ -83,7 +83,7 @@ export class AuthService {
         }
         
         if (error.message.includes('Failed to fetch')) {
-          throw new Error('Erro de conexão. Verifique se o servidor está rodando na porta 3333.');
+          throw new Error('Erro de conexão. Tente novamente mais tarde.');
         }
         
         if (error.message.includes('404')) {
