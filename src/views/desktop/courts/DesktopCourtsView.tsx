@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { useCourts } from '@/hooks/useCourts';
+import { useReservations } from '@/hooks/useReservations';
 import type { Court } from '@/types/court';
 
 // Interface para exibição com dados extras
@@ -51,6 +52,7 @@ interface CourtDisplay extends Court {
 
 export const DesktopCourtsView = () => {
   const { courts, isLoading, error, refreshCourts, deleteCourt, clearError } = useCourts();
+  const { reservations } = useReservations();
   const [filteredCourts, setFilteredCourts] = useState<CourtDisplay[]>([]);
   const [selectedSport, setSelectedSport] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,21 +93,59 @@ export const DesktopCourtsView = () => {
     return `${nome} é uma quadra de ${tipo} com excelente infraestrutura para prática esportiva.`;
   };
 
-  // Transformar dados da API para interface de exibição
-  const transformCourts = (apiCourts: Court[]): CourtDisplay[] => {
-    return apiCourts.map(court => ({
-      ...court,
-      rating: 4.5 + Math.random() * 0.5, // Rating simulado
-      available: Math.random() > 0.2, // 80% disponíveis
-      image: getSportEmoji(court.tipo),
-      features: generateFeatures(court.tipo),
-      description: generateCourtDescription(court.nome, court.tipo),
-    }));
+  // Função para verificar se uma quadra está disponível agora
+  const isCourtAvailable = (courtId: string): boolean => {
+    const now = new Date();
+    
+    // Buscar reservas ativas para esta quadra
+    const activeReservations = reservations.filter(reservation => {
+      // Filtrar apenas reservas desta quadra
+      if (reservation.courtId !== courtId) return false;
+      
+      // Filtrar apenas reservas não canceladas
+      if (reservation.status === 'cancelado' || reservation.status === 'cancelled') return false;
+      
+      // Verificar se a reserva está acontecendo agora
+      const startTime = new Date(reservation.dataHoraInicio);
+      const endTime = new Date(reservation.dataHoraFim);
+      
+      return now >= startTime && now <= endTime;
+    });
+    
+    // Se não há reservas ativas, a quadra está disponível
+    return activeReservations.length === 0;
   };
+
+  // Função para gerar hash consistente baseado no ID
+  const generateConsistentHash = (id: string): number => {
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      const char = id.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
+  };
+
+  // Transformar dados da API para interface de exibição usando useMemo para consistência
+  const transformedCourts = useMemo(() => {
+    return courts.map(court => {
+      const hash = generateConsistentHash(court.id);
+      
+      return {
+        ...court,
+        rating: 4.0 + (hash % 10) / 10, // Rating entre 4.0 e 4.9 baseado no hash
+        available: isCourtAvailable(court.id), // ✅ REAL: baseado nas reservas do backend
+        image: getSportEmoji(court.tipo),
+        features: generateFeatures(court.tipo),
+        description: generateCourtDescription(court.nome, court.tipo),
+      };
+    });
+  }, [courts, reservations]); // ✅ Recalcula quando courts OU reservations mudarem
 
   // Filtrar quadras quando mudarem os filtros
   useEffect(() => {
-    let filtered = transformCourts(courts);
+    let filtered = transformedCourts;
 
     // Filtro por esporte
     if (selectedSport > 0) {
@@ -125,7 +165,7 @@ export const DesktopCourtsView = () => {
     }
 
     setFilteredCourts(filtered);
-  }, [courts, selectedSport, searchTerm]);
+  }, [transformedCourts, selectedSport, searchTerm]);
 
   const handleReserveCourt = (court: CourtDisplay) => {
     if (court.available) {

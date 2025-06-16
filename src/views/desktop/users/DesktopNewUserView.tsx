@@ -40,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
 import { useUser, useUsers } from '@/hooks/useUsers';
+import { AuthService } from '@/lib/auth';
 import type { CreateUserRequest, UpdateUserRequest } from '@/hooks/useUsers';
 
 interface UserForm {
@@ -83,6 +84,19 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
 
   const isEditMode = mode === 'edit';
   const isLoading = isEditMode ? isLoadingUser : false;
+
+  // ✅ NOVO: Verificar se o usuário logado pode editar roles
+  const currentUser = AuthService.getUser();
+  const canEditRole = () => {
+    if (!isEditMode) return true; // Modo criação: sempre pode definir role
+    if (!currentUser) return false;
+    if (currentUser.role === 'ADMIN') return true; // Admin pode editar qualquer role
+    if (currentUser.id === userId) return false; // Usuário não pode editar própria role
+    return true; // Admin editando outro usuário
+  };
+
+  // ✅ NOVO: Verificar se está editando o próprio perfil
+  const isEditingOwnProfile = isEditMode && currentUser && currentUser.id === userId;
 
   const roles = [
     { value: 'USER', label: 'Usuário', description: 'Acesso básico ao sistema' },
@@ -173,7 +187,8 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
           nome: form.nome.trim(),
           email: form.email.trim(),
           telefone: form.telefone.trim() || undefined,
-          role: form.role,
+          // ✅ NOVO: Só incluir role se o usuário pode editá-la
+          ...(canEditRole() && { role: form.role }),
         };
 
         console.log('🔍 Atualizando usuário:', userId, updateData);
@@ -181,6 +196,17 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
         
         if (success) {
           console.log('✅ Usuário atualizado com sucesso');
+          
+          // ✅ NOVO: Se atualizou próprio perfil, atualizar dados locais
+          if (isEditingOwnProfile) {
+            const updatedUser = { 
+              ...currentUser, 
+              ...updateData,
+              role: updateData.role as 'USER' | 'ADMIN' // ✅ Type assertion para corrigir o tipo
+            };
+            AuthService.setUser(updatedUser);
+          }
+          
           router.push('/desktop/users?updated=true');
         }
       } else {
@@ -299,7 +325,7 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
   const selectedRole = roles.find(r => r.value === form.role);
 
   return (
-    <Container maxWidth="md">
+    <Container maxWidth="xl">
       {/* Header */}
       <Box display="flex" alignItems="center" gap={2} mb={4}>
         <Button
@@ -312,12 +338,6 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
         <Box>
           <Typography variant="h4" component="h1" gutterBottom>
             {isEditMode ? 'Editar Usuário' : 'Novo Usuário'}
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {isEditMode 
-              ? `Atualize as informações do usuário${user ? ` "${user.nome}"` : ''}`
-              : 'Cadastre um novo usuário no sistema'
-            }
           </Typography>
         </Box>
       </Box>
@@ -399,30 +419,32 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
                   }}
                 />
 
-                {/* Função */}
-                <FormControl fullWidth error={!!errors.role}>
-                  <InputLabel>Função *</InputLabel>
-                  <Select
-                    value={form.role}
-                    onChange={(e) => handleInputChange('role', e.target.value)}
-                    label="Função *"
-                  >
-                    {roles.map((role) => (
-                      <MenuItem key={role.value} value={role.value}>
-                        <Box display="flex" alignItems="center" gap={2}>
-                          {role.value === 'ADMIN' ? <AdminIcon /> : <PersonIcon />}
-                          <Box>
-                            <Typography variant="body1">{role.label}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {role.description}
-                            </Typography>
+                {/* Função - ✅ NOVO: Condicional baseada em permissões */}
+                {canEditRole() && (
+                  <FormControl fullWidth error={!!errors.role}>
+                    <InputLabel>Função *</InputLabel>
+                    <Select
+                      value={form.role}
+                      onChange={(e) => handleInputChange('role', e.target.value)}
+                      label="Função *"
+                    >
+                      {roles.map((role) => (
+                        <MenuItem key={role.value} value={role.value}>
+                          <Box display="flex" alignItems="center" gap={2}>
+                            {role.value === 'ADMIN' ? <AdminIcon /> : <PersonIcon />}
+                            <Box>
+                              <Typography variant="body1">{role.label}</Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {role.description}
+                              </Typography>
+                            </Box>
                           </Box>
-                        </Box>
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.role && <FormHelperText>{errors.role}</FormHelperText>}
-                </FormControl>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.role && <FormHelperText>{errors.role}</FormHelperText>}
+                  </FormControl>
+                )}
 
                 {/* Senhas */}
                 {(!isEditMode || form.senha) && (
@@ -581,14 +603,7 @@ export const DesktopNewUserView = ({ mode = 'create' }: Props = {}) => {
                 <li>Senhas devem ter pelo menos 6 caracteres</li>
                 <li>Administradores têm acesso total ao sistema</li>
                 {isEditMode && <li>Deixe a senha vazia para manter a atual</li>}
-              </Typography>
-            </Alert>
-
-            {/* Role Info */}
-            <Alert severity={form.role === 'ADMIN' ? "warning" : "success"}>
-              <Typography variant="body2">
-                <strong>{selectedRole?.label}:</strong>{' '}
-                {selectedRole?.description}
+                {isEditingOwnProfile && <li>Você não pode alterar sua própria função</li>}
               </Typography>
             </Alert>
           </Stack>

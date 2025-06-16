@@ -1,3 +1,5 @@
+// src/components/layout/DashboardLayout.tsx
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -30,8 +32,8 @@ import {
   People as PeopleIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
+  ChevronLeft as ChevronLeftIcon,
   Person as PersonIcon,
-  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { AuthService } from '@/lib/auth';
 import type { User } from '@/types/auth';
@@ -47,7 +49,6 @@ interface NavItem {
   icon: React.ReactNode;
   path: string;
   badge?: string;
-  adminOnly?: boolean;
 }
 
 export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
@@ -59,7 +60,6 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const pathname = usePathname();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const isAdmin = user?.role === 'ADMIN';
 
   useEffect(() => {
     // Verificar autenticação e carregar usuário
@@ -71,7 +71,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     setUser(currentUser);
   }, [router]);
 
-  const allNavItems: NavItem[] = [
+  const navItems: NavItem[] = [
     { 
       text: 'Dashboard', 
       icon: <DashboardIcon />, 
@@ -80,28 +80,26 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
     { 
       text: 'Quadras', 
       icon: <SportsIcon />, 
-      path: '/desktop/courts'
+      path: '/desktop/courts',
+      badge: '12'
     },
     { 
-      text: isAdmin ? 'Gerenciar Reservas' : 'Minhas Reservas', 
+      text: 'Reservas', 
       icon: <CalendarIcon />, 
-      path: '/desktop/reservations'
+      path: '/desktop/reservations',
+      badge: '3'
     },
     { 
       text: 'Usuários', 
       icon: <PeopleIcon />, 
-      path: '/desktop/users',
-      adminOnly: true
+      path: '/desktop/users' 
     },
     { 
       text: 'Configurações', 
       icon: <SettingsIcon />, 
-      path: '/desktop/settings' 
+      path: user ? `/desktop/users/${user.id}/edit` : '/desktop/settings' // ✅ CORREÇÃO: redireciona para editar perfil do usuário logado
     },
   ];
-
-  // Filtrar itens baseado no papel do usuário
-  const navItems = allNavItems.filter(item => !item.adminOnly || isAdmin);
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -121,14 +119,59 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   };
 
   const handleNavigation = (path: string) => {
-    router.push(path);
+    console.log('🔍 Navegando via menu lateral para:', path);
+    console.log('🔍 Rota atual:', pathname);
+    
+    // Se já estamos na rota de destino, forçar reload
+    if (pathname === path) {
+      console.log('✅ Já estamos na rota de destino, forçando reload...');
+      window.location.href = path;
+    } else {
+      router.push(path);
+    }
+    
     if (isMobile) {
       setMobileOpen(false);
     }
   };
 
   const handleProfileClick = () => {
-    router.push('/desktop/profile');
+    // ✅ CORREÇÃO: redireciona para página de edição do usuário logado
+    if (user) {
+      console.log('🔍 Navegando para perfil do usuário:', user.id);
+      console.log('🔍 Rota atual:', pathname);
+      console.log('🔍 Rota destino:', `/desktop/users/${user.id}/edit`);
+      
+      const targetRoute = `/desktop/users/${user.id}/edit`;
+      
+      // Se já estamos na rota de destino, forçar reload
+      if (pathname === targetRoute) {
+        console.log('✅ Já estamos na rota de destino, forçando reload...');
+        window.location.href = targetRoute;
+      } else {
+        router.push(targetRoute);
+      }
+    }
+    handleMenuClose();
+  };
+
+  const handleSettingsClick = () => {
+    // ✅ CORREÇÃO: redireciona para página de edição do usuário logado
+    if (user) {
+      console.log('🔍 Navegando para configurações do usuário:', user.id);
+      console.log('🔍 Rota atual:', pathname);
+      console.log('🔍 Rota destino:', `/desktop/users/${user.id}/edit`);
+      
+      const targetRoute = `/desktop/users/${user.id}/edit`;
+      
+      // Se já estamos na rota de destino, forçar reload
+      if (pathname === targetRoute) {
+        console.log('✅ Já estamos na rota de destino, forçando reload...');
+        window.location.href = targetRoute;
+      } else {
+        router.push(targetRoute);
+      }
+    }
     handleMenuClose();
   };
 
@@ -148,33 +191,6 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
         </Box>
       </Toolbar>
       <Divider />
-      
-      {/* User Info in Drawer */}
-      <Box sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}>
-        <Avatar 
-          sx={{ 
-            bgcolor: isAdmin ? 'error.main' : 'primary.main',
-            width: 40,
-            height: 40,
-            mx: 'auto',
-            mb: 1
-          }}
-        >
-          {user.nome?.charAt(0) || 'U'}
-        </Avatar>
-        <Typography variant="body2" fontWeight="medium" noWrap>
-          {user.nome}
-        </Typography>
-        <Chip 
-          label={isAdmin ? 'Admin' : 'Usuário'} 
-          color={isAdmin ? 'error' : 'primary'}
-          size="small"
-          sx={{ mt: 0.5 }}
-        />
-      </Box>
-      
-      <Divider />
-      
       <List>
         {navItems.map((item) => (
           <ListItem key={item.text} disablePadding>
@@ -245,7 +261,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           </IconButton>
           
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {isAdmin ? 'PlayBee - Painel Administrativo' : 'PlayBee - Dashboard'}
+            Dashboard
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -258,23 +274,10 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
             >
               {user.nome}
             </Typography>
-            <Chip 
-              label={isAdmin ? 'ADMIN' : 'USER'} 
-              size="small" 
-              color={isAdmin ? 'error' : 'default'}
-              icon={isAdmin ? <AdminIcon /> : <PersonIcon />}
-              sx={{ 
-                mr: 1, 
-                display: { xs: 'none', sm: 'inline-flex' },
-                color: 'white',
-                borderColor: 'rgba(255,255,255,0.3)'
-              }}
-              variant="outlined"
-            />
             <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
               <Avatar 
                 sx={{ 
-                  bgcolor: isAdmin ? 'error.main' : 'secondary.main',
+                  bgcolor: 'secondary.main',
                   width: 36,
                   height: 36,
                 }}
@@ -305,7 +308,7 @@ export const DashboardLayout = ({ children }: DashboardLayoutProps) => {
           <PersonIcon sx={{ mr: 1 }} />
           Meu Perfil
         </MenuItem>
-        <MenuItem onClick={() => { router.push('/desktop/settings'); handleMenuClose(); }}>
+        <MenuItem onClick={handleSettingsClick}>
           <SettingsIcon sx={{ mr: 1 }} />
           Configurações
         </MenuItem>
