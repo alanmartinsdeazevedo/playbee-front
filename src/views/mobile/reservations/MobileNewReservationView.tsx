@@ -1,6 +1,7 @@
+// src/views/mobile/reservations/MobileNewReservationView.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import {
   Box,
   Card,
@@ -25,6 +26,7 @@ import {
   Step,
   StepLabel,
   Fab,
+  CircularProgress,
 } from '@mui/material';
 import {
   ArrowBack as ArrowBackIcon,
@@ -62,7 +64,7 @@ interface ReservationForm {
   notes: string;
 }
 
-export const MobileNewReservationView = () => {
+const MobileNewReservationContent = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preSelectedCourtId = searchParams.get('courtId');
@@ -81,47 +83,20 @@ export const MobileNewReservationView = () => {
   const [errors, setErrors] = useState<Partial<ReservationForm>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const steps = ['Quadra', 'Usuário', 'Data & Hora', 'Confirmar'];
-
-  // Mock data
-  const courts: Court[] = [
-    {
-      id: 1,
-      name: 'Quadra Central',
-      sport: 'Futebol',
-      location: 'Centro',
-      available: true,
-      image: '🏟️'
-    },
-    {
-      id: 2,
-      name: 'Arena Basketball',
-      sport: 'Basquete',
-      location: 'Zona Norte',
-      available: true,
-      image: '🏀'
-    },
-    {
-      id: 3,
-      name: 'Vôlei Beach',
-      sport: 'Vôlei',
-      location: 'Praia',
-      available: true,
-      image: '🏐'
-    },
+  const mockCourts: Court[] = [
+    { id: 1, name: 'Quadra de Tênis 1', sport: 'Tênis', location: 'Área A', available: true, image: '' },
+    { id: 2, name: 'Quadra de Futebol', sport: 'Futebol', location: 'Área B', available: true, image: '' },
+    { id: 3, name: 'Quadra de Basquete', sport: 'Basquete', location: 'Área C', available: false, image: '' },
   ];
 
-  const users: User[] = [
+  const mockUsers: User[] = [
     { id: 1, name: 'João Silva', email: 'joao@email.com' },
     { id: 2, name: 'Maria Santos', email: 'maria@email.com' },
-    { id: 3, name: 'Pedro Costa', email: 'pedro@email.com' },
+    { id: 3, name: 'Pedro Oliveira', email: 'pedro@email.com' },
   ];
 
-  const availableCourts = courts.filter(court => court.available);
-  const selectedCourt = courts.find(court => court.id.toString() === form.courtId);
-  const selectedUser = users.find(user => user.id.toString() === form.userId);
+  const steps = ['Quadra', 'Usuário', 'Data e Horário', 'Confirmação'];
 
-  // Calculate duration when start/end time changes
   useEffect(() => {
     if (form.startTime && form.endTime) {
       const start = new Date(`2000-01-01T${form.startTime}`);
@@ -130,7 +105,7 @@ export const MobileNewReservationView = () => {
       if (end > start) {
         const diffMs = end.getTime() - start.getTime();
         const hours = diffMs / (1000 * 60 * 60);
-        setForm(prev => ({ ...prev, duration: Math.round(hours * 2) / 2 }));
+        setForm(prev => ({ ...prev, duration: Math.round(hours * 10) / 10 }));
       } else {
         setForm(prev => ({ ...prev, duration: 0 }));
       }
@@ -149,13 +124,13 @@ export const MobileNewReservationView = () => {
     const newErrors: Partial<ReservationForm> = {};
 
     switch (step) {
-      case 0: // Court
+      case 0:
         if (!form.courtId) newErrors.courtId = 'Selecione uma quadra';
         break;
-      case 1: // User
+      case 1:
         if (!form.userId) newErrors.userId = 'Selecione um usuário';
         break;
-      case 2: // Date & Time
+      case 2:
         if (!form.date) newErrors.date = 'Selecione uma data';
         if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
         if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
@@ -190,19 +165,12 @@ export const MobileNewReservationView = () => {
   };
 
   const handleSubmit = async () => {
+    if (!validateStep(2)) return;
+
     setIsSubmitting(true);
-
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      console.log('Nova reserva:', {
-        ...form,
-        status: 'upcoming',
-        createdAt: new Date().toISOString(),
-      });
-
-      router.push('/mobile/reservations?created=true');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      router.push('/mobile/reservations');
     } catch (error) {
       console.error('Erro ao criar reserva:', error);
     } finally {
@@ -210,95 +178,85 @@ export const MobileNewReservationView = () => {
     }
   };
 
-  // Generate time options
-  const timeOptions: string[] = [];
-  for (let hour = 7; hour <= 22; hour++) {
-    for (let minute of [0, 30]) {
-      if (hour === 22 && minute === 30) break;
-      const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      timeOptions.push(time);
-    }
-  }
+  const selectedCourt = mockCourts.find(court => court.id.toString() === form.courtId);
+  const selectedUser = mockUsers.find(user => user.id.toString() === form.userId);
 
-  const today = new Date().toISOString().split('T')[0];
-
-  const renderStepContent = (step: number) => {
-    switch (step) {
-      case 0: // Court Selection
+  const renderStepContent = () => {
+    switch (activeStep) {
+      case 0:
         return (
-          <Stack spacing={2}>
+          <Stack spacing={3}>
             <Typography variant="h6" gutterBottom>
-              Escolha a Quadra
+              Selecione uma Quadra
             </Typography>
-            {availableCourts.map((court) => (
-              <Card 
-                key={court.id}
-                sx={{ 
-                  cursor: 'pointer',
-                  border: form.courtId === court.id.toString() ? 2 : 1,
-                  borderColor: form.courtId === court.id.toString() ? 'primary.main' : 'divider',
-                  bgcolor: form.courtId === court.id.toString() ? 'primary.50' : 'background.paper'
-                }}
-                onClick={() => handleInputChange('courtId', court.id.toString())}
+            <FormControl fullWidth error={!!errors.courtId}>
+              <InputLabel>Quadra</InputLabel>
+              <Select
+                value={form.courtId}
+                label="Quadra"
+                onChange={(e) => handleInputChange('courtId', e.target.value)}
               >
-                <CardContent sx={{ p: 2 }}>
-                  <Box display="flex" alignItems="center" gap={2}>
-                    <Avatar sx={{ bgcolor: 'primary.main', fontSize: '1.5rem' }}>
-                      {court.image}
-                    </Avatar>
-                    <Box flex={1}>
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {court.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {court.sport} • {court.location}
-                      </Typography>
+                {mockCourts.map((court) => (
+                  <MenuItem key={court.id} value={court.id.toString()} disabled={!court.available}>
+                    <Box display="flex" alignItems="center" gap={2} width="100%">
+                      <Avatar sx={{ bgcolor: court.available ? 'success.main' : 'grey.500' }}>
+                        <SportsIcon />
+                      </Avatar>
+                      <Box flex={1}>
+                        <Typography variant="subtitle1">{court.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {court.sport} • {court.location}
+                        </Typography>
+                      </Box>
+                      <Chip 
+                        label={court.available ? 'Disponível' : 'Ocupada'} 
+                        color={court.available ? 'success' : 'default'}
+                        size="small"
+                      />
                     </Box>
-                    <Chip label="Disponível" color="success" size="small" />
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
-            {errors.courtId && (
-              <Alert severity="error">{errors.courtId}</Alert>
-            )}
+                  </MenuItem>
+                ))}
+              </Select>
+              {errors.courtId && <FormHelperText>{errors.courtId}</FormHelperText>}
+            </FormControl>
           </Stack>
         );
 
-      case 1: // User Selection
+      case 1:
         return (
-          <Stack spacing={2}>
+          <Stack spacing={3}>
             <Typography variant="h6" gutterBottom>
               Selecione o Usuário
             </Typography>
-            {users.map((user) => (
-              <Card 
-                key={user.id}
-                sx={{ 
-                  cursor: 'pointer',
-                  border: form.userId === user.id.toString() ? 2 : 1,
-                  borderColor: form.userId === user.id.toString() ? 'primary.main' : 'divider',
-                  bgcolor: form.userId === user.id.toString() ? 'primary.50' : 'background.paper'
-                }}
-                onClick={() => handleInputChange('userId', user.id.toString())}
+            <FormControl fullWidth error={!!errors.userId}>
+              <InputLabel>Usuário</InputLabel>
+              <Select
+                value={form.userId}
+                label="Usuário"
+                onChange={(e) => handleInputChange('userId', e.target.value)}
               >
-                <CardContent sx={{ p: 2 }}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {user.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {user.email}
-                  </Typography>
-                </CardContent>
-              </Card>
-            ))}
-            {errors.userId && (
-              <Alert severity="error">{errors.userId}</Alert>
-            )}
+                {mockUsers.map((user) => (
+                  <MenuItem key={user.id} value={user.id.toString()}>
+                    <Box display="flex" alignItems="center" gap={2}>
+                      <Avatar sx={{ bgcolor: 'primary.main' }}>
+                        {user.name.charAt(0)}
+                      </Avatar>
+                      <Box>
+                        <Typography variant="subtitle1">{user.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {user.email}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+              {errors.userId && <FormHelperText>{errors.userId}</FormHelperText>}
+            </FormControl>
           </Stack>
         );
 
-      case 2: // Date & Time
+      case 2:
         return (
           <Stack spacing={3}>
             <Typography variant="h6" gutterBottom>
@@ -306,160 +264,114 @@ export const MobileNewReservationView = () => {
             </Typography>
             
             <TextField
-              label="Data"
+              fullWidth
               type="date"
+              label="Data"
               value={form.date}
               onChange={(e) => handleInputChange('date', e.target.value)}
               InputLabelProps={{ shrink: true }}
-              inputProps={{ min: today }}
               error={!!errors.date}
               helperText={errors.date}
-              fullWidth
             />
 
-            <FormControl fullWidth error={!!errors.startTime}>
-              <InputLabel>Horário de Início</InputLabel>
-              <Select
+            <Stack direction="row" spacing={2}>
+              <TextField
+                sx={{ flex: 1 }}
+                type="time"
+                label="Horário de Início"
                 value={form.startTime}
                 onChange={(e) => handleInputChange('startTime', e.target.value)}
-                label="Horário de Início"
-              >
-                {timeOptions.map((time) => (
-                  <MenuItem key={time} value={time}>
-                    {time}
-                  </MenuItem>
-                ))}
-              </Select>
-              {errors.startTime && <FormHelperText>{errors.startTime}</FormHelperText>}
-            </FormControl>
-
-            <FormControl fullWidth error={!!errors.endTime}>
-              <InputLabel>Horário de Fim</InputLabel>
-              <Select
+                InputLabelProps={{ shrink: true }}
+                error={!!errors.startTime}
+                helperText={errors.startTime}
+              />
+              <TextField
+                sx={{ flex: 1 }}
+                type="time"
+                label="Horário de Fim"
                 value={form.endTime}
                 onChange={(e) => handleInputChange('endTime', e.target.value)}
-                label="Horário de Fim"
-              >
-                {timeOptions.map((time) => (
-                  <MenuItem key={time} value={time}>
-                    {time}
-                  </MenuItem>
-                ))}
-              </Select>
-              {errors.endTime && <FormHelperText>{errors.endTime}</FormHelperText>}
-            </FormControl>
+                InputLabelProps={{ shrink: true }}
+                error={!!errors.endTime}
+                helperText={errors.endTime}
+              />
+            </Stack>
 
             {form.duration > 0 && (
               <Alert severity="info">
-                <Typography variant="body2">
-                  Duração: <strong>{form.duration}h</strong>
-                </Typography>
+                Duração: {form.duration} hora{form.duration !== 1 ? 's' : ''}
               </Alert>
             )}
 
             <TextField
-              label="Observações (Opcional)"
+              fullWidth
               multiline
-              rows={2}
+              rows={3}
+              label="Observações (opcional)"
               value={form.notes}
               onChange={(e) => handleInputChange('notes', e.target.value)}
-              placeholder="Adicione observações..."
-              fullWidth
+              placeholder="Adicione observações sobre a reserva..."
             />
           </Stack>
         );
 
-      case 3: // Confirmation
+      case 3:
         return (
           <Stack spacing={3}>
             <Typography variant="h6" gutterBottom>
               Confirmar Reserva
             </Typography>
             
-            {/* Summary Cards */}
             <Card variant="outlined">
-              <CardContent sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">
-                  QUADRA
-                </Typography>
-                {selectedCourt && (
-                  <Box display="flex" alignItems="center" gap={2} mt={1}>
-                    <Avatar sx={{ bgcolor: 'primary.main', fontSize: '1.2rem', width: 40, height: 40 }}>
-                      {selectedCourt.image}
-                    </Avatar>
+              <CardContent>
+                <Stack spacing={2}>
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <SportsIcon color="primary" />
                     <Box>
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {selectedCourt.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {selectedCourt.sport} • {selectedCourt.location}
+                      <Typography variant="subtitle1">{selectedCourt?.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {selectedCourt?.sport} • {selectedCourt?.location}
                       </Typography>
                     </Box>
                   </Box>
-                )}
-              </CardContent>
-            </Card>
 
-            <Card variant="outlined">
-              <CardContent sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">
-                  USUÁRIO
-                </Typography>
-                {selectedUser && (
-                  <Box mt={1}>
-                    <Typography variant="subtitle1" fontWeight="bold">
-                      {selectedUser.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {selectedUser.email}
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <Avatar sx={{ bgcolor: 'primary.main' }}>
+                      {selectedUser?.name.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="subtitle1">{selectedUser?.name}</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {selectedUser?.email}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <CalendarIcon color="action" />
+                    <Typography>
+                      {new Date(form.date).toLocaleDateString('pt-BR')}
                     </Typography>
                   </Box>
-                )}
+
+                  <Box display="flex" alignItems="center" gap={2}>
+                    <AccessTimeIcon color="action" />
+                    <Typography>
+                      {form.startTime} às {form.endTime} ({form.duration}h)
+                    </Typography>
+                  </Box>
+
+                  {form.notes && (
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom>Observações:</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {form.notes}
+                      </Typography>
+                    </Box>
+                  )}
+                </Stack>
               </CardContent>
             </Card>
-
-            <Card variant="outlined">
-              <CardContent sx={{ p: 2 }}>
-                <Typography variant="caption" color="text.secondary">
-                  DATA E HORÁRIO
-                </Typography>
-                <Box mt={1}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {form.date ? new Date(form.date).toLocaleDateString('pt-BR', {
-                      weekday: 'long',
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric'
-                    }) : 'Não selecionada'}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {form.startTime && form.endTime 
-                      ? `${form.startTime} às ${form.endTime} (${form.duration}h)`
-                      : 'Horário não definido'
-                    }
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-
-            {form.notes && (
-              <Card variant="outlined">
-                <CardContent sx={{ p: 2 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    OBSERVAÇÕES
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1 }}>
-                    {form.notes}
-                  </Typography>
-                </CardContent>
-              </Card>
-            )}
-
-            <Alert severity="success">
-              <Typography variant="body2">
-                <strong>Tudo pronto!</strong> Sua reserva será criada com status "Agendada".
-              </Typography>
-            </Alert>
           </Stack>
         );
 
@@ -469,83 +381,78 @@ export const MobileNewReservationView = () => {
   };
 
   return (
-    <Box sx={{ pb: 10 }}>
-      {/* Header */}
-      <AppBar position="sticky" sx={{ bgcolor: 'background.paper', color: 'text.primary' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'grey.50' }}>
+      <AppBar position="sticky">
         <Toolbar>
-          <IconButton edge="start" onClick={() => router.back()}>
+          <IconButton edge="start" color="inherit" onClick={() => router.back()}>
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h6" sx={{ ml: 2 }}>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Nova Reserva
           </Typography>
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="sm" sx={{ py: 2 }}>
-        {/* Stepper */}
-        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+      <Container maxWidth="sm" sx={{ py: 3 }}>
+        <Card>
+          <CardContent>
+            <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4 }}>
+              {steps.map((label) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
 
-        {/* Step Content */}
-        <Box sx={{ mb: 8 }}>
-          {renderStepContent(activeStep)}
-        </Box>
+            {renderStepContent()}
+
+            <Stack direction="row" spacing={2} sx={{ mt: 4 }}>
+              {activeStep > 0 && (
+                <Button 
+                  startIcon={<BackIcon />}
+                  onClick={handleBack}
+                  variant="outlined"
+                >
+                  Voltar
+                </Button>
+              )}
+              
+              <Box sx={{ flexGrow: 1 }} />
+              
+              {activeStep < steps.length - 1 ? (
+                <Button 
+                  endIcon={<NextIcon />}
+                  onClick={handleNext}
+                  variant="contained"
+                >
+                  Próximo
+                </Button>
+              ) : (
+                <Button
+                  startIcon={<SaveIcon />}
+                  onClick={handleSubmit}
+                  variant="contained"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Salvando...' : 'Confirmar'}
+                </Button>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
       </Container>
-
-      {/* Bottom Navigation */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          bgcolor: 'background.paper',
-          borderTop: 1,
-          borderColor: 'divider',
-          p: 2,
-        }}
-      >
-        <Stack direction="row" spacing={2}>
-          <Button
-            variant="outlined"
-            onClick={handleBack}
-            disabled={activeStep === 0}
-            startIcon={<BackIcon />}
-            fullWidth
-          >
-            Voltar
-          </Button>
-          
-          {activeStep === steps.length - 1 ? (
-            <Button
-              variant="contained"
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              startIcon={<SaveIcon />}
-              fullWidth
-              size="large"
-            >
-              {isSubmitting ? 'Criando...' : 'Criar Reserva'}
-            </Button>
-          ) : (
-            <Button
-              variant="contained"
-              onClick={handleNext}
-              endIcon={<NextIcon />}
-              fullWidth
-              size="large"
-            >
-              Próximo
-            </Button>
-          )}
-        </Stack>
-      </Box>
     </Box>
+  );
+};
+
+export const MobileNewReservationView = () => {
+  return (
+    <Suspense fallback={
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <CircularProgress />
+      </Box>
+    }>
+      <MobileNewReservationContent />
+    </Suspense>
   );
 };
