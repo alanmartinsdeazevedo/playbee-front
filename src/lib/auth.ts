@@ -1,3 +1,4 @@
+// src/lib/auth.ts
 import { api } from './api';
 import type { User } from '@/types/auth';
 
@@ -40,6 +41,10 @@ export class AuthService {
     }
   }
 
+  static updateUser(user: User): void {
+    this.setUser(user);
+  }
+
   static removeAuth(): void {
     if (typeof window === 'undefined') return;
     
@@ -51,7 +56,29 @@ export class AuthService {
     return !!this.getUser() && !!this.getToken();
   }
 
-  // Login
+  static hasRole(requiredRole: 'USER' | 'ADMIN'): boolean {
+    const user = this.getUser();
+    if (!user) return false;
+    
+    if (requiredRole === 'ADMIN') {
+      return user.role === 'ADMIN';
+    }
+    
+    return true;
+  }
+
+  static canManageUsers(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  static canManageAllReservations(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
+  static canAccessAdminFeatures(): boolean {
+    return this.hasRole('ADMIN');
+  }
+
   static async login(email: string, senha: string): Promise<User> {
     try {
       console.log('Fazendo login para:', email);
@@ -97,7 +124,6 @@ export class AuthService {
     }
   }
 
-  // Registro novo usuário
   static async register(userData: {
     nome: string;
     email: string;
@@ -113,12 +139,12 @@ export class AuthService {
         role: userData.role || 'USER'
       };
 
-      // Criar usuário
+      // Criar usuário usando POST /users (que existe no backend)
       const newUser = await api.post<User>('/users', newUserData);
       
       console.log('Usuário criado com sucesso:', newUser.nome);
       
-      // Login automático
+      // Login automático após criação
       const loginResponse = await this.login(userData.email, userData.senha);
       
       return loginResponse;
@@ -146,130 +172,10 @@ export class AuthService {
     }
   }
 
-  // Logout
   static logout(): void {
+    this.removeAuth();
     if (typeof window !== 'undefined') {
-      this.removeAuth();
-      
-      const userAgent = navigator.userAgent;
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) || window.innerWidth <= 768;
-      
-      if (isMobile) {
-        window.location.href = '/mobile/login';
-      } else {
-        window.location.href = '/desktop/login';
-      }
+      window.location.href = '/desktop/login';
     }
-  }
-
-  static isTokenValid(): boolean {
-    const token = this.getToken();
-    
-    if (!token) return false;
-
-    try {
-      const parts = token.split('.');
-      if (parts.length !== 3) return false;
-
-      return true;
-
-    } catch (error) {
-      console.error('Erro ao validar token:', error);
-      return false;
-    }
-  }
-
-  static validateSession(): boolean {
-    const user = this.getUser();
-    const isTokenValid = this.isTokenValid();
-    
-    if (!user || !isTokenValid) {
-      this.removeAuth();
-      return false;
-    }
-    
-    return true;
-  }
-
-  static requireAuth(): User {
-    const user = this.getUser();
-    
-    if (!user || !this.isTokenValid()) {
-      this.logout();
-      throw new Error('Acesso negado. Faça login.');
-    }
-    
-    return user;
-  }
-
-  static hasRole(requiredRole: string): boolean {
-    const user = this.getUser();
-    
-    if (!user) return false;
-    
-    if (requiredRole === 'USER') {
-      return user.role === 'USER' || user.role === 'ADMIN';
-    }
-    
-    if (requiredRole === 'ADMIN') {
-      return user.role === 'ADMIN';
-    }
-    
-    return false;
-  }
-
-  static isAdmin(): boolean {
-    const user = this.getUser();
-    return user?.role === 'ADMIN';
-  }
-
-  static isUser(): boolean {
-    const user = this.getUser();
-    return user?.role === 'USER' || user?.role === 'ADMIN';
-  }
-
-  static getAuthState() {
-    return {
-      user: this.getUser(),
-      token: this.getToken(),
-      isAuthenticated: this.isAuthenticated(),
-      isTokenValid: this.isTokenValid(),
-      isAdmin: this.isAdmin(),
-    };
-  }
-
-  static canAccessAdminFeatures(): boolean {
-    return this.hasRole('ADMIN');
-  }
-
-  static canManageUsers(): boolean {
-    return this.hasRole('ADMIN');
-  }
-
-  static canManageAllReservations(): boolean {
-    return this.hasRole('ADMIN');
-  }
-
-  static canCreateReservations(): boolean {
-    return this.isAuthenticated();
-  }
-
-  static canManageOwnReservations(): boolean {
-    return this.isAuthenticated();
-  }
-
-  static getUserDisplayName(): string {
-    const user = this.getUser();
-    return user?.nome || 'Usuário';
-  }
-
-  static getUserRole(): string {
-    const user = this.getUser();
-    return user?.role || 'USER';
-  }
-
-  static getUserId(): string | null {
-    const user = this.getUser();
-    return user?.id || null;
   }
 }

@@ -61,7 +61,6 @@ import { AuthService } from '@/lib/auth';
 import type { Schedule } from '@/types/reservation';
 import type { User } from '@/types/auth';
 
-// Interface expandida para exibição
 interface ReservationDisplay extends Schedule {
   courtName?: string;
   courtLocation?: string;
@@ -78,7 +77,7 @@ export const DesktopReservationsView = () => {
   
   const [reservations, setReservations] = useState<Schedule[]>([]);
   const [filteredReservations, setFilteredReservations] = useState<ReservationDisplay[]>([]);
-  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(0); // 0 = Próximas por padrão
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCourt, setSelectedCourt] = useState('');
   const [selectedUser, setSelectedUser] = useState('');
@@ -92,59 +91,51 @@ export const DesktopReservationsView = () => {
   const searchParams = useSearchParams();
 
   const isAdmin = currentUser?.role === 'ADMIN';
-  const tabs = isAdmin ? ['Todas', 'Próximas', 'Concluídas', 'Canceladas'] : ['Minhas Reservas', 'Próximas', 'Concluídas', 'Canceladas'];
+  
+  // Atualizar as abas para começar com "Próximas" por padrão
+  const tabs = isAdmin 
+    ? ['Próximas', 'Concluídas', 'Canceladas', 'Todas', 'Histórico']
+    : ['Próximas', 'Concluídas', 'Canceladas', 'Histórico'];
 
-  // Carregar dados das reservas baseado no papel do usuário
+  useEffect(() => {
+    const user = AuthService.getUser();
+    if (!user) {
+      router.push('/desktop/login');
+      return;
+    }
+    setCurrentUser(user);
+    loadReservations();
+  }, [router]);
+
   const loadReservations = async () => {
     try {
       setIsLoading(true);
       setError('');
-
-      // Verificar autenticação
-      const user = AuthService.getUser();
-      if (!user) {
-        router.push('/desktop/login');
-        return;
-      }
-      setCurrentUser(user);
-
-      let data: Schedule[];
       
-      if (user.role === 'ADMIN') {
-        // Admin vê todas as reservas
-        console.log('🔍 Admin: Carregando todas as reservas');
-        data = await ReservationsService.getAll();
-      } else {
-        // Usuário comum vê apenas suas reservas
-        console.log('🔍 Usuário comum: Carregando apenas suas reservas');
-        data = await ReservationsService.getByUser(user.id);
+      const data = await ReservationsService.getAll();
+      
+      let userReservations = data;
+      if (!isAdmin && currentUser) {
+        userReservations = data.filter(r => r.userId === currentUser.id);
       }
       
-      console.log('✅ Reservas carregadas:', data.length);
-      setReservations(data);
+      setReservations(userReservations);
     } catch (err) {
-      console.error('❌ Erro ao carregar reservas:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao carregar reservas';
-      setError(errorMessage);
+      console.error('Erro ao carregar reservas:', err);
+      setError('Erro ao carregar reservas');
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadReservations();
-  }, [router]);
-
-  // Transformar dados das reservas para incluir informações adicionais
-  const transformReservations = (apiReservations: Schedule[]): ReservationDisplay[] => {
-    return apiReservations.map(reservation => {
+  const transformReservations = (reservations: Schedule[]): ReservationDisplay[] => {
+    return reservations.map(reservation => {
       const court = courts.find(c => c.id === reservation.courtId);
       const user = users.find(u => u.id === reservation.userId);
       
-      const duration = ReservationsService.calculateDuration(
-        new Date(reservation.dataHoraInicio),
-        new Date(reservation.dataHoraFim)
-      );
+      const start = new Date(reservation.dataHoraInicio);
+      const end = new Date(reservation.dataHoraFim);
+      const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 
       const getSportEmoji = (tipo?: string): string => {
         if (!tipo) return '🏟️';
@@ -169,30 +160,45 @@ export const DesktopReservationsView = () => {
     });
   };
 
-  // Filtrar reservas quando mudarem os filtros
   useEffect(() => {
     let filtered = transformReservations(reservations);
 
-    // Filtro por aba
+    // Filtro por aba - CORRIGIDO para começar com próximas
     switch (selectedTab) {
-      case 1: // Próximas
+      case 0: // Próximas (agora é a primeira aba)
         filtered = filtered.filter(r => {
           const now = new Date();
           const startTime = new Date(r.dataHoraInicio);
-          return startTime >= now && r.status !== 'cancelado' && r.status !== 'cancelled';
+          return startTime >= now && !['cancelado', 'cancelled'].includes(r.status.toLowerCase());
         });
         break;
-      case 2: // Concluídas
+      case 1: // Concluídas
         filtered = filtered.filter(r => {
           const now = new Date();
           const endTime = new Date(r.dataHoraFim);
-          return endTime < now || r.status === 'concluido' || r.status === 'completed';
+          return endTime < now || ['concluido', 'completed'].includes(r.status.toLowerCase());
         });
         break;
-      case 3: // Canceladas
-        filtered = filtered.filter(r => r.status === 'cancelado' || r.status === 'cancelled');
+      case 2: // Canceladas
+        filtered = filtered.filter(r => ['cancelado', 'cancelled'].includes(r.status.toLowerCase()));
         break;
-      default: // Todas/Minhas Reservas
+      case 3: // Todas (apenas para admin)
+        // Admin pode ver todas, usuário comum não tem essa aba
+        break;
+      case 4: // Histórico (todas as passadas - última aba)
+        filtered = filtered.filter(r => {
+          const now = new Date();
+          const endTime = new Date(r.dataHoraFim);
+          return endTime < now;
+        });
+        break;
+      default:
+        // Fallback para próximas
+        filtered = filtered.filter(r => {
+          const now = new Date();
+          const startTime = new Date(r.dataHoraInicio);
+          return startTime >= now && !['cancelado', 'cancelled'].includes(r.status.toLowerCase());
+        });
         break;
     }
 
@@ -216,13 +222,18 @@ export const DesktopReservationsView = () => {
       filtered = filtered.filter(r => r.userId === selectedUser);
     }
 
-    // Ordenar por data (mais recentes primeiro)
-    filtered.sort((a, b) => new Date(b.dataHoraInicio).getTime() - new Date(a.dataHoraInicio).getTime());
+    // Ordenar por data
+    if (selectedTab === 0) {
+      // Próximas: ordenar por data crescente (próximas primeiro)
+      filtered.sort((a, b) => new Date(a.dataHoraInicio).getTime() - new Date(b.dataHoraInicio).getTime());
+    } else {
+      // Outras abas: ordenar por data decrescente (mais recentes primeiro)
+      filtered.sort((a, b) => new Date(b.dataHoraInicio).getTime() - new Date(a.dataHoraInicio).getTime());
+    }
 
     setFilteredReservations(filtered);
   }, [reservations, courts, users, selectedTab, searchTerm, selectedCourt, selectedUser, isAdmin]);
 
-  // Mostrar mensagem de sucesso se veio de criação/edição
   useEffect(() => {
     const created = searchParams.get('created');
     const updated = searchParams.get('updated');
@@ -298,7 +309,7 @@ export const DesktopReservationsView = () => {
     try {
       await ReservationsService.delete(reservation.id);
       console.log('✅ Reserva excluída com sucesso');
-      await loadReservations(); // Recarregar dados
+      await loadReservations();
     } catch (err) {
       console.error('❌ Erro ao excluir reserva:', err);
       setError('Erro ao excluir reserva');
@@ -307,243 +318,112 @@ export const DesktopReservationsView = () => {
     handleMenuClose();
   };
 
-  const upcomingCount = filteredReservations.filter(r => {
+  const upcomingCount = reservations.filter(r => {
     const now = new Date();
     const startTime = new Date(r.dataHoraInicio);
-    return startTime >= now && !['cancelado', 'cancelled'].includes(r.status);
+    return startTime >= now && !['cancelado', 'cancelled'].includes(r.status.toLowerCase());
   }).length;
 
-  const completedCount = filteredReservations.filter(r => {
+  const completedCount = reservations.filter(r => {
     const now = new Date();
     const endTime = new Date(r.dataHoraFim);
-    return endTime < now || ['concluido', 'completed'].includes(r.status);
+    return endTime < now || ['concluido', 'completed'].includes(r.status.toLowerCase());
   }).length;
 
-  const cancelledCount = filteredReservations.filter(r => 
-    ['cancelado', 'cancelled'].includes(r.status)
+  const cancelledCount = reservations.filter(r => 
+    ['cancelado', 'cancelled'].includes(r.status.toLowerCase())
   ).length;
 
-  // Loading skeleton
   if (isLoading) {
     return (
       <Container maxWidth="xl">
         <Box mb={4}>
-          <Skeleton variant="text" width={300} height={40} />
-          <Skeleton variant="text" width={200} height={24} />
+          <Skeleton variant="text" width={200} height={40} />
+          <Skeleton variant="text" width={300} height={24} />
         </Box>
-        
-        <Stack direction="row" spacing={3} mb={4}>
-          {[1, 2, 3].map((item) => (
-            <Card key={item} sx={{ flex: 1 }}>
-              <CardContent>
-                <Skeleton variant="circular" width={40} height={40} />
-                <Skeleton variant="text" width={80} height={32} sx={{ mt: 1 }} />
-                <Skeleton variant="text" width={120} height={20} />
-              </CardContent>
-            </Card>
-          ))}
-        </Stack>
-
-        <Paper elevation={1} sx={{ p: 3, mb: 4 }}>
-          <Stack direction="row" spacing={3}>
-            <Skeleton variant="rectangular" width={200} height={40} />
-            <Skeleton variant="rectangular" width={300} height={40} />
-          </Stack>
-        </Paper>
-
-        <TableContainer component={Paper}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                {['Quadra', 'Usuário', 'Data & Hora', 'Duração', 'Status', 'Ações'].map((header) => (
-                  <TableCell key={header}>
-                    <Skeleton variant="text" width={100} />
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {[1, 2, 3, 4, 5].map((item) => (
-                <TableRow key={item}>
-                  {[1, 2, 3, 4, 5, 6].map((cell) => (
-                    <TableCell key={cell}>
-                      <Skeleton variant="text" width={120} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <Skeleton variant="rectangular" height={400} />
       </Container>
     );
   }
 
   return (
     <Container maxWidth="xl">
-      {/* Header */}
-      <Box 
-        display="flex" 
-        justifyContent="space-between" 
-        alignItems="center" 
-        mb={4}
-        flexDirection={{ xs: 'column', sm: 'row' }}
-        gap={2}
-      >
-        <Box>
-          <Typography variant="h4" component="h1" gutterBottom>
-            {isAdmin ? 'Gerenciar Reservas' : 'Minhas Reservas'}
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {isAdmin 
-              ? 'Gerencie todas as reservas do sistema' 
-              : 'Visualize e gerencie suas reservas'
-            }
-          </Typography>
-          <Box display="flex" alignItems="center" gap={1} mt={1}>
-            {isAdmin && (
-              <Chip 
-                label="Modo Administrador" 
-                color="error" 
-                size="small" 
-                icon={<AdminIcon />}
-              />
-            )}
-            <Typography variant="caption" color="text.secondary">
-              {upcomingCount} próximas • {completedCount} concluídas • {cancelledCount} canceladas
-            </Typography>
-          </Box>
-        </Box>
-        
-        <Stack direction="row" spacing={2}>
-          <Button 
-            variant="outlined" 
-            startIcon={<RefreshIcon />}
-            onClick={handleRefresh}
-            disabled={isLoading}
-          >
-            Atualizar
-          </Button>
-          <Button 
-            variant="contained" 
-            startIcon={<AddIcon />}
-            onClick={() => router.push('/desktop/reservations/new')}
-          >
-            Nova Reserva
-          </Button>
-        </Stack>
+      <Box mb={4}>
+        <Typography variant="h4" fontWeight="bold" gutterBottom>
+          {isAdmin ? 'Todas as Reservas' : 'Minhas Reservas'}
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {isAdmin 
+            ? 'Gerencie todas as reservas do sistema'
+            : 'Visualize e gerencie suas reservas'
+          }
+        </Typography>
       </Box>
 
-      {/* Summary Cards */}
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} mb={4}>
-        <Card sx={{ flex: 1 }}>
-          <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: 'primary.main' }}>
-              <ScheduleIcon />
-            </Avatar>
-            <Box>
-              <Typography variant="h5" fontWeight="bold">
-                {upcomingCount}
-              </Typography>
-              <Typography color="text.secondary">
-                Próximas Reservas
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
-
-        <Card sx={{ flex: 1 }}>
-          <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: 'success.main' }}>
-              <CheckCircleIcon />
-            </Avatar>
-            <Box>
-              <Typography variant="h5" fontWeight="bold">
-                {completedCount}
-              </Typography>
-              <Typography color="text.secondary">
-                Concluídas
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
-
-        <Card sx={{ flex: 1 }}>
-          <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ bgcolor: 'error.main' }}>
-              <CancelIcon />
-            </Avatar>
-            <Box>
-              <Typography variant="h5" fontWeight="bold">
-                {cancelledCount}
-              </Typography>
-              <Typography color="text.secondary">
-                Canceladas
-              </Typography>
-            </Box>
-          </CardContent>
-        </Card>
-      </Stack>
-
-      {/* Error Alert */}
       {error && (
-        <Alert 
-          severity="error" 
-          sx={{ mb: 3 }}
-          onClose={() => setError('')}
-          action={
-            <Button color="inherit" size="small" onClick={handleRefresh}>
-              Tentar Novamente
-            </Button>
-          }
-        >
+        <Alert severity="error" sx={{ mb: 3 }} action={
+          <Button color="inherit" size="small" onClick={handleRefresh}>
+            Tentar Novamente
+          </Button>
+        }>
           {error}
         </Alert>
       )}
 
-      {/* Filters */}
-      <Paper elevation={1} sx={{ mb: 4, borderRadius: 2 }}>
-        <Box p={2}>
-          {/* Tabs */}
-          <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-            <Tabs
-              value={selectedTab}
-              onChange={(_, newValue) => setSelectedTab(newValue)}
-              sx={{
-                '& .MuiTab-root': { textTransform: 'none' }
-              }}
-            >
-              {tabs.map((tab, index) => (
-                <Tab key={tab} label={tab} />
-              ))}
-            </Tabs>
-          </Box>
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Tabs 
+            value={selectedTab} 
+            onChange={(_, newValue) => setSelectedTab(newValue)}
+            sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+          >
+            {tabs.map((tab, index) => (
+              <Tab 
+                key={tab}
+                label={
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography>{tab}</Typography>
+                    {index === 0 && upcomingCount > 0 && (
+                      <Chip label={upcomingCount} size="small" color="primary" />
+                    )}
+                    {index === 1 && completedCount > 0 && (
+                      <Chip label={completedCount} size="small" color="success" />
+                    )}
+                    {index === 2 && cancelledCount > 0 && (
+                      <Chip label={cancelledCount} size="small" color="error" />
+                    )}
+                  </Stack>
+                }
+                sx={{ textTransform: 'none' }}
+              />
+            ))}
+          </Tabs>
 
-          {/* Search and Filters */}
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mb={3}>
             <TextField
-              placeholder="Buscar reservas..."
+              placeholder="Buscar por quadra, usuário, esporte..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon color="action" />
+                    <SearchIcon />
                   </InputAdornment>
                 ),
               }}
-              sx={{ minWidth: 300 }}
-              size="small"
+              sx={{ flex: 1 }}
             />
-
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <InputLabel>Filtrar por Quadra</InputLabel>
+            
+            <FormControl sx={{ minWidth: 150 }}>
+              <InputLabel>Quadra</InputLabel>
               <Select
                 value={selectedCourt}
+                label="Quadra"
                 onChange={(e) => setSelectedCourt(e.target.value)}
-                label="Filtrar por Quadra"
               >
-                <MenuItem value="">Todas as Quadras</MenuItem>
+                <MenuItem value="">
+                  <em>Todas as quadras</em>
+                </MenuItem>
                 {courts.map((court) => (
                   <MenuItem key={court.id} value={court.id}>
                     {court.nome}
@@ -553,14 +433,16 @@ export const DesktopReservationsView = () => {
             </FormControl>
 
             {isAdmin && (
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel>Filtrar por Usuário</InputLabel>
+              <FormControl sx={{ minWidth: 150 }}>
+                <InputLabel>Usuário</InputLabel>
                 <Select
                   value={selectedUser}
+                  label="Usuário"
                   onChange={(e) => setSelectedUser(e.target.value)}
-                  label="Filtrar por Usuário"
                 >
-                  <MenuItem value="">Todos os Usuários</MenuItem>
+                  <MenuItem value="">
+                    <em>Todos os usuários</em>
+                  </MenuItem>
                   {users.map((user) => (
                     <MenuItem key={user.id} value={user.id}>
                       {user.nome}
@@ -569,112 +451,114 @@ export const DesktopReservationsView = () => {
                 </Select>
               </FormControl>
             )}
-          </Stack>
-        </Box>
-      </Paper>
 
-      {/* Reservations Table */}
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={handleRefresh}
+              sx={{ textTransform: 'none' }}
+            >
+              Atualizar
+            </Button>
+
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => router.push('/desktop/reservations/new')}
+              sx={{ textTransform: 'none' }}
+            >
+              Nova Reserva
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+
       {filteredReservations.length > 0 ? (
-        <TableContainer component={Paper} sx={{ borderRadius: 2 }}>
+        <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
                 <TableCell>Quadra</TableCell>
-                {isAdmin && <TableCell>Usuário</TableCell>}
-                <TableCell>Data & Hora</TableCell>
+                <TableCell>Data e Horário</TableCell>
                 <TableCell>Duração</TableCell>
+                {isAdmin && <TableCell>Usuário</TableCell>}
                 <TableCell>Status</TableCell>
-                <TableCell align="center">Ações</TableCell>
+                <TableCell align="right">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {filteredReservations.map((reservation) => (
-                <TableRow 
-                  key={reservation.id}
-                  sx={{ '&:hover': { bgcolor: 'action.hover' } }}
-                >
+                <TableRow key={reservation.id} hover>
                   <TableCell>
-                    <Box display="flex" alignItems="center" gap={2}>
-                      <Avatar sx={{ width: 40, height: 40, fontSize: '1.2rem' }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Avatar sx={{ bgcolor: 'primary.main' }}>
                         {reservation.icon}
                       </Avatar>
                       <Box>
-                        <Typography variant="body2" fontWeight="medium">
+                        <Typography variant="subtitle2" fontWeight="bold">
                           {reservation.courtName}
                         </Typography>
-                        <Box display="flex" alignItems="center" gap={0.5}>
-                          <SportsIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                          <Typography variant="caption" color="text.secondary">
-                            {reservation.sport}
-                          </Typography>
-                          <LocationIcon sx={{ fontSize: 14, color: 'text.secondary', ml: 0.5 }} />
-                          <Typography variant="caption" color="text.secondary">
-                            {reservation.courtLocation}
-                          </Typography>
-                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          <LocationIcon sx={{ fontSize: 12, mr: 0.5 }} />
+                          {reservation.courtLocation}
+                        </Typography>
                       </Box>
-                    </Box>
+                    </Stack>
                   </TableCell>
-                  
-                  {isAdmin && (
-                    <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <PersonIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                        <Box>
-                          <Typography variant="body2" fontWeight="medium">
-                            {reservation.userName}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {reservation.userEmail}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                  )}
                   
                   <TableCell>
                     <Box>
-                      <Typography variant="body2" fontWeight="medium">
+                      <Typography variant="subtitle2">
                         {formatDate(reservation.dataHoraInicio)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {formatTime(reservation.dataHoraInicio)} às {formatTime(reservation.dataHoraFim)}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  
-                  <TableCell>
-                    <Box display="flex" alignItems="center" gap={0.5}>
-                      <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
-                      <Typography variant="body2">
-                        {reservation.duration?.toFixed(1)}h
+                        {formatTime(reservation.dataHoraInicio)} - {formatTime(reservation.dataHoraFim)}
                       </Typography>
                     </Box>
                   </TableCell>
                   
                   <TableCell>
                     <Chip 
-                      label={getStatusText(reservation.status)}
+                      label={`${reservation.duration}h`}
                       size="small"
-                      color={getStatusColor(reservation.status) as any}
-                      variant="filled"
+                      icon={<AccessTimeIcon />}
+                      variant="outlined"
                     />
                   </TableCell>
                   
-                  <TableCell align="center">
-                    <Stack direction="row" spacing={1} justifyContent="center">
+                  {isAdmin && (
+                    <TableCell>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Avatar sx={{ width: 24, height: 24, fontSize: '0.75rem' }}>
+                          {reservation.userName?.charAt(0)}
+                        </Avatar>
+                        <Typography variant="body2">
+                          {reservation.userName}
+                        </Typography>
+                      </Stack>
+                    </TableCell>
+                  )}
+                  
+                  <TableCell>
+                    <Chip 
+                      label={getStatusText(reservation.status)}
+                      color={getStatusColor(reservation.status) as any}
+                      size="small"
+                    />
+                  </TableCell>
+                  
+                  <TableCell align="right">
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                       <Tooltip title="Ver detalhes">
                         <IconButton 
                           size="small" 
-                          color="primary"
                           onClick={() => router.push(`/desktop/reservations/${reservation.id}`)}
                         >
                           <VisibilityIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       
-                      {/* Só pode editar se for admin ou se for sua própria reserva */}
-                      {(isAdmin || reservation.userId === currentUser?.id) && 
+                      {(isAdmin || reservation.userId === currentUser?.id) &&
                        !['cancelado', 'cancelled', 'concluido', 'completed'].includes(reservation.status) && (
                         <Tooltip title="Editar">
                           <IconButton 
@@ -709,11 +593,11 @@ export const DesktopReservationsView = () => {
             Nenhuma reserva encontrada
           </Typography>
           <Typography variant="body2" color="text.secondary" mb={3}>
-            {selectedTab === 1 
-              ? 'Não há reservas agendadas'
-              : selectedTab === 2 
+            {selectedTab === 0 
+              ? 'Não há reservas futuras agendadas'
+              : selectedTab === 1 
               ? 'Nenhuma reserva foi concluída ainda'
-              : selectedTab === 3
+              : selectedTab === 2
               ? 'Nenhuma reserva foi cancelada'
               : searchTerm || selectedCourt || selectedUser
               ? 'Tente ajustar os filtros ou criar uma nova reserva'
@@ -733,7 +617,6 @@ export const DesktopReservationsView = () => {
         </Paper>
       )}
 
-      {/* Context Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
@@ -770,7 +653,6 @@ export const DesktopReservationsView = () => {
           </MenuItem>
         )}
         
-        {/* Só pode excluir se for admin ou se for sua própria reserva */}
         {selectedReservation && (isAdmin || selectedReservation.userId === currentUser?.id) && (
           <MenuItem 
             onClick={() => {
