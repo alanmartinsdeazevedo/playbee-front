@@ -9,18 +9,26 @@ export class AuthService {
   static setToken(token: string): void {
     if (typeof window === 'undefined') return;
     
+    console.log('🔍 Debug: Armazenando token:', token ? `${token.substring(0, 20)}...` : 'VAZIO');
     document.cookie = `${this.TOKEN_KEY}=${token}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax; ${process.env.NODE_ENV === 'production' ? 'secure;' : ''}`;
+    console.log('🔍 Debug: Cookie após armazenar:', document.cookie);
   }
 
   static getToken(): string | null {
     if (typeof window === 'undefined') return null;
+    
+    console.log('🔍 Debug: Buscando token no AuthService...');
+    console.log('🔍 Debug: Cookies disponíveis:', document.cookie);
     
     const cookies = document.cookie.split(';');
     const authCookie = cookies.find(cookie => 
       cookie.trim().startsWith(`${this.TOKEN_KEY}=`)
     );
     
-    return authCookie ? authCookie.split('=')[1] : null;
+    const token = authCookie ? authCookie.split('=')[1] : null;
+    console.log('🔍 Debug: Token encontrado no AuthService:', token ? 'SIM' : 'NÃO');
+    
+    return token;
   }
 
   static setUser(user: User): void {

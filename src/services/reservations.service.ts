@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { AuthService } from '@/lib/auth';
 import type { 
   Schedule, 
   CreateScheduleRequest, 
@@ -9,6 +10,17 @@ import type {
 export class ReservationsService {
   static async create(data: CreateScheduleRequest): Promise<Schedule> {
     try {
+      // Verificar se o usuário está autenticado antes de enviar
+      const currentUser = AuthService.getUser();
+      const token = AuthService.getToken();
+      
+      console.log('🔍 Debug: Usuário atual:', currentUser ? currentUser.nome : 'NENHUM');
+      console.log('🔍 Debug: Token disponível:', token ? 'SIM' : 'NÃO');
+      
+      if (!currentUser || !token) {
+        throw new Error('Usuário não está autenticado');
+      }
+      
       const payload = {
         dataHoraInicio: data.dataHoraInicio instanceof Date ? data.dataHoraInicio.toISOString() : data.dataHoraInicio,
         dataHoraFim: data.dataHoraFim instanceof Date ? data.dataHoraFim.toISOString() : data.dataHoraFim,
@@ -17,7 +29,7 @@ export class ReservationsService {
         // userId é agora automático no backend baseado no token JWT
       };
 
-      console.log('Payload sendo enviado para /schedule:', payload);
+      console.log('🔍 Debug: Payload sendo enviado para /schedule:', payload);
       
       const response = await api.post<any>('/schedule', payload);
       

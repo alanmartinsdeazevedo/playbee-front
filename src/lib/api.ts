@@ -1,3 +1,5 @@
+import { AuthService } from './auth';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://play.api.beezes.com.br';
 
 class SimpleApiClient {
@@ -8,14 +10,14 @@ class SimpleApiClient {
   }
 
   private getAuthToken(): string | null {
+    // Usar diretamente o AuthService para consistência
     if (typeof window === 'undefined') return null;
     
-    const cookies = document.cookie.split(';');
-    const authCookie = cookies.find(cookie => 
-      cookie.trim().startsWith('auth-token=')
-    );
+    console.log('🔍 Debug: SimpleApiClient - obtendo token via AuthService...');
+    const token = AuthService.getToken();
+    console.log('🔍 Debug: SimpleApiClient - token obtido:', token ? 'SIM' : 'NÃO');
     
-    return authCookie ? authCookie.split('=')[1] : null;
+    return token;
   }
 
   private async request<T>(
@@ -33,6 +35,8 @@ class SimpleApiClient {
       ...(token && { Authorization: `Bearer ${token}` }),
       ...(optionsHeaders || {}),
     };
+    
+    console.log('🔍 Debug: Headers sendo enviados:', headers);
 
     try {
       const response = await fetch(url, {
