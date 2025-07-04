@@ -78,13 +78,15 @@ export const useDashboard = (): UseDashboardResult => {
       let userReservations: Schedule[] = [];
       
       try {
+        // A API já filtra automaticamente baseado no role do usuário
+        allReservations = await ReservationsService.getAll();
+        
         if (isUserAdmin) {
-          // Admin: buscar todas as reservas
-          allReservations = await ReservationsService.getAll();
+          // Admin: separar suas reservas pessoais das reservas totais
           userReservations = allReservations.filter(r => r.userId === currentUser.id);
         } else {
-          // Usuário comum: buscar apenas suas reservas
-          userReservations = await ReservationsService.getByUser(currentUser.id);
+          // Usuário comum: a API já retorna apenas suas reservas
+          userReservations = allReservations;
         }
       } catch (err) {
         console.warn('Erro ao carregar reservas:', err);

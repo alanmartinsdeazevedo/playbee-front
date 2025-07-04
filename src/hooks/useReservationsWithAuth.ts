@@ -36,15 +36,9 @@ export const useReservationsWithAuth = (): UseReservationsWithAuthResult => {
         return;
       }
 
-      let data: Schedule[];
-      
-      if (user.role === 'ADMIN') {
-        // Admin vê todas as reservas
-        data = await ReservationsService.getAll();
-      } else {
-        // Usuário comum vê apenas suas reservas
-        data = await ReservationsService.getAllByUser(user.id);
-      }
+      // A API já filtra automaticamente baseado no role do usuário
+      // Admins veem todas as reservas, usuários normais veem apenas as suas
+      const data = await ReservationsService.getAll();
       
       setReservations(data);
     } catch (err) {

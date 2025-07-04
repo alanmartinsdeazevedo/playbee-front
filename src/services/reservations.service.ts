@@ -139,15 +139,10 @@ export class ReservationsService {
 
   static async getAll(): Promise<Schedule[]> {
     try {
-      const response = await api.get<any>('/schedule');
+      const response = await api.get<Schedule[]>('/schedule');
       
-      if (response && typeof response === 'object') {
-        if ('schedules' in response && Array.isArray(response.schedules)) {
-          return response.schedules;
-        }
-        if (Array.isArray(response)) {
-          return response;
-        }
+      if (Array.isArray(response)) {
+        return response;
       }
       
       return [];
@@ -159,15 +154,10 @@ export class ReservationsService {
 
   static async getAllByUser(userId: string): Promise<Schedule[]> {
     try {
-      const response = await api.get<any>(`/schedule?userId=${userId}`);
+      const response = await api.get<Schedule[]>(`/schedule?userId=${userId}`);
       
-      if (response && typeof response === 'object') {
-        if ('schedules' in response && Array.isArray(response.schedules)) {
-          return response.schedules;
-        }
-        if (Array.isArray(response)) {
-          return response;
-        }
+      if (Array.isArray(response)) {
+        return response;
       }
       
       return [];
@@ -181,29 +171,14 @@ export class ReservationsService {
     try {
       console.log('🔍 Buscando reservas do usuário:', userId);
       
-      // Primeiro tentar buscar com filtro de userId na API
-      try {
-        const response = await api.get<any>(`/schedule?userId=${userId}`);
-        
-        if (response && typeof response === 'object') {
-          if ('schedules' in response && Array.isArray(response.schedules)) {
-            console.log('✅ Reservas encontradas via API:', response.schedules.length);
-            return response.schedules;
-          }
-          if (Array.isArray(response)) {
-            console.log('✅ Reservas encontradas (array direto):', response.length);
-            return response;
-          }
-        }
-      } catch (apiError) {
-        console.warn('Endpoint com filtro userId não disponível, usando fallback');
+      const response = await api.get<Schedule[]>(`/schedule?userId=${userId}`);
+      
+      if (Array.isArray(response)) {
+        console.log('✅ Reservas encontradas:', response.length);
+        return response;
       }
       
-      // Fallback: buscar todas e filtrar no frontend
-      const allReservations = await this.getAll();
-      const userReservations = allReservations.filter(reservation => reservation.userId === userId);
-      console.log('✅ Reservas filtradas no frontend:', userReservations.length);
-      return userReservations;
+      return [];
     } catch (error) {
       console.error('Erro ao buscar reservas do usuário:', error);
       return [];
@@ -212,6 +187,8 @@ export class ReservationsService {
 
   static async getByCourt(courtId: string): Promise<Schedule[]> {
     try {
+      // Para buscar por quadra específica, pode ser necessário buscar todas
+      // pois a API pode filtrar por usuário automaticamente
       const allReservations = await this.getAll();
       return allReservations.filter(reservation => reservation.courtId === courtId);
     } catch (error) {

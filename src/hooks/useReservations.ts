@@ -29,6 +29,7 @@ export const useReservations = (): UseReservationsResult => {
       setIsLoading(true);
       setError('');
       
+      // A API já filtra automaticamente baseado no role do usuário
       const data = await ReservationsService.getAll();
       setReservations(data);
     } catch (err) {
