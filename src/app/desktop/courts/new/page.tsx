@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { DesktopNewCourtView } from '@/views/desktop/courts/DesktopNewCourtView';
+import { RoleGuard } from '@/components/auth/RoleGuard';
 
 export const metadata: Metadata = {
   title: 'Nova Quadra - PlayBee',
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function DesktopNewCourtPage() {
-  return <DesktopNewCourtView />;
+  return (
+    <RoleGuard requiredRole="ADMIN" redirectTo="/desktop/courts">
+      <DesktopNewCourtView />
+    </RoleGuard>
+  );
 }

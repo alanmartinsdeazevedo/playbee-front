@@ -15,6 +15,7 @@ interface UseReservationsResult {
   createReservation: (data: CreateScheduleRequest) => Promise<Schedule | null>;
   updateReservation: (id: string, data: UpdateScheduleRequest) => Promise<Schedule | null>;
   deleteReservation: (id: string) => Promise<boolean>;
+  cancelReservation: (id: string) => Promise<Schedule | null>;
   searchReservations: (filters: ReservationFilter) => Promise<Schedule[]>;
   clearError: () => void;
 }
@@ -127,6 +128,25 @@ export const useReservations = (): UseReservationsResult => {
     }
   }, []);
 
+  const cancelReservation = useCallback(async (id: string): Promise<Schedule | null> => {
+    try {
+      setError('');
+      
+      const cancelledReservation = await ReservationsService.cancel(id);
+      
+      // Atualizar a reserva na lista local
+      setReservations(prev => 
+        prev.map(reservation => reservation.id === id ? cancelledReservation : reservation)
+      );
+      
+      return cancelledReservation;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao cancelar reserva';
+      setError(errorMessage);
+      return null;
+    }
+  }, []);
+
   const searchReservations = useCallback(async (filters: ReservationFilter): Promise<Schedule[]> => {
     try {
       setError('');
@@ -156,6 +176,7 @@ export const useReservations = (): UseReservationsResult => {
     createReservation,
     updateReservation,
     deleteReservation,
+    cancelReservation,
     searchReservations,
     clearError,
   };

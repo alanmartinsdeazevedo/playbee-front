@@ -39,6 +39,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { useCourts } from '@/hooks/useCourts';
 import { useReservations } from '@/hooks/useReservations';
+import { AuthService } from '@/lib/auth';
 import type { Court } from '@/types/court';
 
 // Interface para exibição com dados extras
@@ -57,6 +58,10 @@ export const DesktopCourtsView = () => {
   const [selectedSport, setSelectedSport] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const router = useRouter();
+
+  // Verificar se o usuário é admin
+  const user = AuthService.getUser();
+  const isAdmin = user?.role === 'ADMIN';
 
   const sports = ['Todos', 'Futebol', 'Basquete', 'Tênis', 'Vôlei'];
 
@@ -271,13 +276,15 @@ export const DesktopCourtsView = () => {
           >
             Atualizar
           </Button>
-          <Button 
-            variant="contained" 
-            startIcon={<AddIcon />}
-            onClick={() => router.push('/desktop/courts/new')}
-          >
-            Nova Quadra
-          </Button>
+          {isAdmin && (
+            <Button 
+              variant="contained" 
+              startIcon={<AddIcon />}
+              onClick={() => router.push('/desktop/courts/new')}
+            >
+              Nova Quadra
+            </Button>
+          )}
         </Stack>
       </Box>
 
@@ -477,23 +484,27 @@ export const DesktopCourtsView = () => {
                     </IconButton>
                   </Tooltip>
                   
-                  <Tooltip title="Editar quadra">
-                    <IconButton 
-                      color="default"
-                      onClick={() => router.push(`/desktop/courts/${court.id}/edit`)}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                  </Tooltip>
-                  
-                  <Tooltip title="Excluir quadra">
-                    <IconButton 
-                      color="error"
-                      onClick={() => handleDeleteCourt(court)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Tooltip>
+                  {isAdmin && (
+                    <>
+                      <Tooltip title="Editar quadra">
+                        <IconButton 
+                          color="default"
+                          onClick={() => router.push(`/desktop/courts/${court.id}/edit`)}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      
+                      <Tooltip title="Excluir quadra">
+                        <IconButton 
+                          color="error"
+                          onClick={() => handleDeleteCourt(court)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  )}
                 </Stack>
               </CardActions>
             </Card>

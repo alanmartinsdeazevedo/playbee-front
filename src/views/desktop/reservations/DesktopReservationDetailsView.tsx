@@ -41,6 +41,7 @@ import { useReservation, useReservations } from '@/hooks/useReservations';
 import { useCourts } from '@/hooks/useCourts';
 import { useUsers } from '@/hooks/useUsers';
 import { AuthService } from '@/lib/auth';
+import { ReservationsService } from '@/services/reservations.service';
 import type { User } from '@/types/auth';
 
 export const DesktopReservationDetailsView = () => {
@@ -50,7 +51,7 @@ export const DesktopReservationDetailsView = () => {
 
   // Hooks para buscar dados reais
   const { reservation, isLoading: isLoadingReservation, error: loadError, refreshReservation } = useReservation(reservationId);
-  const { deleteReservation, updateReservation } = useReservations();
+  const { deleteReservation, updateReservation, cancelReservation } = useReservations();
   const { courts } = useCourts();
   const { users } = useUsers();
 
@@ -73,22 +74,15 @@ export const DesktopReservationDetailsView = () => {
   const canEdit = () => {
     if (!reservation || !currentUser) return false;
     
-    // Admin pode editar qualquer reserva
+    // Verificar se pode editar baseado na regra de negócio (não iniciou)
+    const canEditByTime = ReservationsService.canEditReservation(reservation);
+    if (!canEditByTime) return false;
+    
+    // Admin pode editar qualquer reserva (que não iniciou)
     if (currentUser.role === 'ADMIN') return true;
     
-    // Usuário pode editar apenas suas próprias reservas
-    if (reservation.userId === currentUser.id) {
-      // Não pode editar se estiver cancelado ou concluído
-      const status = reservation.status.toLowerCase();
-      if (status === 'cancelado' || status === 'concluido') return false;
-      
-      // Não pode editar se o horário já passou
-      const now = new Date();
-      const reservationStart = new Date(reservation.dataHoraInicio);
-      return now < reservationStart;
-    }
-    
-    return false;
+    // Usuário pode editar apenas suas próprias reservas (que não iniciaram)
+    return reservation.userId === currentUser.id;
   };
 
   const canDelete = () => {
@@ -104,13 +98,13 @@ export const DesktopReservationDetailsView = () => {
   const canCancel = () => {
     if (!reservation || !currentUser) return false;
     
+    // Verificar se pode cancelar baseado na regra de negócio (não iniciou e não cancelado)
+    const canCancelByRule = ReservationsService.canCancelReservation(reservation);
+    if (!canCancelByRule) return false;
+    
     // Só pode cancelar se for dono da reserva ou admin
     const isOwnerOrAdmin = currentUser.role === 'ADMIN' || reservation.userId === currentUser.id;
-    if (!isOwnerOrAdmin) return false;
-    
-    // Só pode cancelar se estiver agendado ou confirmado
-    const status = reservation.status.toLowerCase();
-    return status === 'agendado' || status === 'confirmado';
+    return isOwnerOrAdmin;
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
@@ -152,8 +146,8 @@ export const DesktopReservationDetailsView = () => {
 
     setIsCancelling(true);
     try {
-      const success = await updateReservation(reservationId, { status: 'cancelado' });
-      if (success) {
+      const cancelledReservation = await cancelReservation(reservationId);
+      if (cancelledReservation) {
         refreshReservation(); // Atualizar dados na tela
       }
     } catch (err) {

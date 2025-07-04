@@ -13,8 +13,8 @@ export class ReservationsService {
         dataHoraInicio: data.dataHoraInicio instanceof Date ? data.dataHoraInicio.toISOString() : data.dataHoraInicio,
         dataHoraFim: data.dataHoraFim instanceof Date ? data.dataHoraFim.toISOString() : data.dataHoraFim,
         status: data.status,
-        userId: data.userId,
         courtId: data.courtId,
+        // userId é agora automático no backend baseado no token JWT
       };
 
       console.log('Payload sendo enviado para /schedule:', payload);
@@ -42,6 +42,10 @@ export class ReservationsService {
         
         if (error.message.includes('conflict') || error.message.includes('409')) {
           throw new Error('Conflito de horário: já existe uma reserva neste período');
+        }
+        
+        if (error.message.includes('já possui uma reserva')) {
+          throw new Error(error.message); // Manter mensagem específica do backend
         }
         
         if (error.message.includes('validation') || error.message.includes('400')) {
@@ -114,6 +118,14 @@ export class ReservationsService {
           throw new Error('Conflito de horário: já existe uma reserva neste período');
         }
         
+        if (error.message.includes('já possui uma reserva')) {
+          throw new Error(error.message); // Manter mensagem específica do backend
+        }
+        
+        if (error.message.includes('já começou') || error.message.includes('não é possível editar')) {
+          throw new Error(error.message); // Mensagem de edição bloqueada
+        }
+        
         if (error.message.includes('validation') || error.message.includes('400')) {
           throw new Error('Dados inválidos da reserva');
         }
@@ -130,6 +142,39 @@ export class ReservationsService {
       if (error instanceof Error) {
         if (error.message.includes('404')) {
           throw new Error('Reserva não encontrada');
+        }
+      }
+      
+      throw error;
+    }
+  }
+
+  static async cancel(id: string): Promise<Schedule> {
+    try {
+      const response = await api.patch<any>(`/schedule/${id}/cancel`, {});
+      
+      if (response && typeof response === 'object') {
+        if ('schedule' in response && response.schedule) {
+          return response.schedule;
+        }
+        if ('id' in response && 'dataHoraInicio' in response) {
+          return response as Schedule;
+        }
+      }
+      
+      throw new Error('Resposta da API em formato inesperado');
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('404')) {
+          throw new Error('Reserva não encontrada');
+        }
+        
+        if (error.message.includes('já começou') || error.message.includes('não é possível cancelar')) {
+          throw new Error(error.message); // Mensagem de cancelamento bloqueado
+        }
+        
+        if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          throw new Error('Você não tem permissão para cancelar esta reserva');
         }
       }
       
@@ -242,6 +287,36 @@ export class ReservationsService {
     return diffMs / (1000 * 60 * 60);
   }
 
+  static isFullHour(date: Date): boolean {
+    return date.getMinutes() === 0 && date.getSeconds() === 0 && date.getMilliseconds() === 0;
+  }
+
+  static generateHourlyTimeSlots(startHour: number = 6, endHour: number = 22): { value: string; label: string }[] {
+    const timeSlots: { value: string; label: string }[] = [];
+    
+    for (let hour = startHour; hour <= endHour; hour++) {
+      const timeString = `${hour.toString().padStart(2, '0')}:00`;
+      timeSlots.push({
+        value: timeString,
+        label: timeString
+      });
+    }
+    
+    return timeSlots;
+  }
+
+  static canEditReservation(reservation: Schedule): boolean {
+    const now = new Date();
+    const startTime = new Date(reservation.dataHoraInicio);
+    return startTime > now;
+  }
+
+  static canCancelReservation(reservation: Schedule): boolean {
+    const now = new Date();
+    const startTime = new Date(reservation.dataHoraInicio);
+    return startTime > now && reservation.status !== 'cancelado';
+  }
+
   static validateReservationData(data: CreateScheduleRequest | UpdateScheduleRequest): string[] {
     const errors: string[] = [];
 
@@ -257,13 +332,27 @@ export class ReservationsService {
         errors.push('Data/hora de início não pode ser no passado');
       }
       
+      // Verificar se os horários são em horas fechadas
+      if (!this.isFullHour(inicio)) {
+        errors.push('Horário de início deve ser em hora fechada (ex: 09:00, 10:00, 11:00...)');
+      }
+      
+      if (!this.isFullHour(fim)) {
+        errors.push('Horário de fim deve ser em hora fechada (ex: 09:00, 10:00, 11:00...)');
+      }
+      
       const duration = this.calculateDuration(inicio, fim);
       if (duration > 8) {
         errors.push('Duração máxima é de 8 horas');
       }
       
-      if (duration < 0.5) {
-        errors.push('Duração mínima é de 30 minutos');
+      if (duration < 1) {
+        errors.push('Duração mínima é de 1 hora');
+      }
+      
+      // Verificar se a duração é um número inteiro de horas
+      if (duration % 1 !== 0) {
+        errors.push('A duração deve ser em horas fechadas (1h, 2h, 3h...)');
       }
     }
 

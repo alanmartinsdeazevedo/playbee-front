@@ -40,6 +40,7 @@ import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import { useCourts } from '@/hooks/useCourts';
 import { useUsers } from '@/hooks/useUsers';
 import { useReservations, useReservation } from '@/hooks/useReservations';
+import { AuthService } from '@/lib/auth';
 import type { CreateScheduleRequest, UpdateScheduleRequest } from '@/types/reservation';
 
 interface ReservationForm {
@@ -70,9 +71,13 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
   const { createReservation, updateReservation, error: crudError, clearError } = useReservations();
   const { reservation, isLoading: isLoadingReservation, error: loadError } = useReservation(reservationId || '');
 
+  // Verificar role do usuário
+  const currentUser = AuthService.getUser();
+  const isAdmin = currentUser?.role === 'ADMIN';
+
   const [form, setForm] = useState<ReservationForm>({
     courtId: preSelectedCourtId || '',
-    userId: '',
+    userId: isAdmin ? '' : (currentUser?.id || ''),
     date: '',
     startTime: '',
     endTime: '',
@@ -297,13 +302,11 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
     clearError();
   };
 
+  // Gerar apenas opções de horas fechadas (00:00, 01:00, 02:00, etc.)
   const timeOptions = [];
   for (let hour = 7; hour <= 22; hour++) {
-    for (let minute of [0, 30]) {
-      if (hour === 22 && minute === 30) break;
-      const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-      timeOptions.push(time);
-    }
+    const time = `${hour.toString().padStart(2, '0')}:00`;
+    timeOptions.push(time);
   }
 
   const today = new Date().toISOString().split('T')[0];
@@ -435,40 +438,42 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                   </FormControl>
                 </Box>
 
-                {/* User Selection */}
-                <Box>
-                  <Typography variant="h6" gutterBottom display="flex" alignItems="center" gap={1}>
-                    <PersonIcon color="primary" />
-                    Usuário
-                  </Typography>
-                  <FormControl fullWidth error={!!errors.userId} disabled={isEditingBlocked}>
-                    <InputLabel>Selecione o usuário</InputLabel>
-                    <Select
-                      value={form.userId}
-                      label="Selecione o usuário"
-                      onChange={(e) => handleInputChange('userId', e.target.value)}
-                    >
-                      {users.map((user) => (
-                        <MenuItem key={user.id} value={user.id}>
-                          <Box display="flex" alignItems="center" gap={2}>
-                            <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
-                              {user.nome.charAt(0)}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="body1" fontWeight="bold">
-                                {user.nome}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {user.email}
-                              </Typography>
+                {/* User Selection - apenas para admins */}
+                {isAdmin && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom display="flex" alignItems="center" gap={1}>
+                      <PersonIcon color="primary" />
+                      Usuário
+                    </Typography>
+                    <FormControl fullWidth error={!!errors.userId} disabled={isEditingBlocked}>
+                      <InputLabel>Selecione o usuário</InputLabel>
+                      <Select
+                        value={form.userId}
+                        label="Selecione o usuário"
+                        onChange={(e) => handleInputChange('userId', e.target.value)}
+                      >
+                        {users.map((user) => (
+                          <MenuItem key={user.id} value={user.id}>
+                            <Box display="flex" alignItems="center" gap={2}>
+                              <Avatar sx={{ width: 32, height: 32, bgcolor: 'secondary.main' }}>
+                                {user.nome.charAt(0)}
+                              </Avatar>
+                              <Box>
+                                <Typography variant="body1" fontWeight="bold">
+                                  {user.nome}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {user.email}
+                                </Typography>
+                              </Box>
                             </Box>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                    {errors.userId && <FormHelperText>{errors.userId}</FormHelperText>}
-                  </FormControl>
-                </Box>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {errors.userId && <FormHelperText>{errors.userId}</FormHelperText>}
+                    </FormControl>
+                  </Box>
+                )}
 
                 {/* Date and Time */}
                 <Box>
@@ -488,6 +493,7 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                         error={!!errors.date}
                         helperText={errors.date}
                         inputProps={{ min: today }}
+                        InputLabelProps={{ shrink: true }}
                         disabled={isEditingBlocked}
                       />
                     </Grid>
@@ -642,8 +648,8 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
               </Card>
             )}
 
-            {/* Selected User Preview */}
-            {selectedUser && (
+            {/* Selected User Preview - apenas para admins */}
+            {isAdmin && selectedUser && (
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>

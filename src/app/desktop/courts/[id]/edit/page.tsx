@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { DesktopNewCourtView } from '@/views/desktop/courts/DesktopNewCourtView';
+import { RoleGuard } from '@/components/auth/RoleGuard';
 
 export const metadata: Metadata = {
   title: 'Editar Quadra - PlayBee',
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function EditCourtPage() {
-  return <DesktopNewCourtView mode="edit" />;
+  return (
+    <RoleGuard requiredRole="ADMIN" redirectTo="/desktop/courts">
+      <DesktopNewCourtView mode="edit" />
+    </RoleGuard>
+  );
 }

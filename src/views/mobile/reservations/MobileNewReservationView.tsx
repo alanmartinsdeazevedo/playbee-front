@@ -38,6 +38,7 @@ import {
   NavigateBefore as BackIcon,
 } from '@mui/icons-material';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { AuthService } from '@/lib/auth';
 
 interface Court {
   id: number;
@@ -69,10 +70,14 @@ const MobileNewReservationContent = () => {
   const searchParams = useSearchParams();
   const preSelectedCourtId = searchParams.get('courtId');
 
+  // Verificar role do usuário
+  const currentUser = AuthService.getUser();
+  const isAdmin = currentUser?.role === 'ADMIN';
+
   const [activeStep, setActiveStep] = useState(0);
   const [form, setForm] = useState<ReservationForm>({
     courtId: preSelectedCourtId || '',
-    userId: '',
+    userId: isAdmin ? '' : (currentUser?.id || ''),
     date: '',
     startTime: '',
     endTime: '',
@@ -123,31 +128,59 @@ const MobileNewReservationContent = () => {
   const validateStep = (step: number): boolean => {
     const newErrors: Partial<ReservationForm> = {};
 
-    switch (step) {
-      case 0:
-        if (!form.courtId) newErrors.courtId = 'Selecione uma quadra';
-        break;
-      case 1:
-        if (!form.userId) newErrors.userId = 'Selecione um usuário';
-        break;
-      case 2:
-        if (!form.date) newErrors.date = 'Selecione uma data';
-        if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
-        if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
-        
-        if (form.date && new Date(form.date) < new Date()) {
-          newErrors.date = 'Data não pode ser no passado';
-        }
-
-        if (form.startTime && form.endTime) {
-          const start = new Date(`2000-01-01T${form.startTime}`);
-          const end = new Date(`2000-01-01T${form.endTime}`);
+    if (isAdmin) {
+      // Lógica para admin (com step de usuário)
+      switch (step) {
+        case 0:
+          if (!form.courtId) newErrors.courtId = 'Selecione uma quadra';
+          break;
+        case 1:
+          if (!form.userId) newErrors.userId = 'Selecione um usuário';
+          break;
+        case 2:
+          if (!form.date) newErrors.date = 'Selecione uma data';
+          if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
+          if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
           
-          if (end <= start) {
-            newErrors.endTime = 'Horário de fim deve ser posterior ao início';
+          if (form.date && new Date(form.date) < new Date()) {
+            newErrors.date = 'Data não pode ser no passado';
           }
-        }
-        break;
+
+          if (form.startTime && form.endTime) {
+            const start = new Date(`2000-01-01T${form.startTime}`);
+            const end = new Date(`2000-01-01T${form.endTime}`);
+            
+            if (end <= start) {
+              newErrors.endTime = 'Horário de fim deve ser posterior ao início';
+            }
+          }
+          break;
+      }
+    } else {
+      // Lógica para usuário normal (sem step de usuário)
+      switch (step) {
+        case 0:
+          if (!form.courtId) newErrors.courtId = 'Selecione uma quadra';
+          break;
+        case 1:
+          if (!form.date) newErrors.date = 'Selecione uma data';
+          if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
+          if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
+          
+          if (form.date && new Date(form.date) < new Date()) {
+            newErrors.date = 'Data não pode ser no passado';
+          }
+
+          if (form.startTime && form.endTime) {
+            const start = new Date(`2000-01-01T${form.startTime}`);
+            const end = new Date(`2000-01-01T${form.endTime}`);
+            
+            if (end <= start) {
+              newErrors.endTime = 'Horário de fim deve ser posterior ao início';
+            }
+          }
+          break;
+      }
     }
 
     setErrors(newErrors);
@@ -165,7 +198,8 @@ const MobileNewReservationContent = () => {
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(2)) return;
+    const lastStepIndex = isAdmin ? 2 : 1;
+    if (!validateStep(lastStepIndex)) return;
 
     setIsSubmitting(true);
     try {
@@ -223,6 +257,13 @@ const MobileNewReservationContent = () => {
         );
 
       case 1:
+        // Mostrar seleção de usuário apenas para admins
+        if (!isAdmin) {
+          // Pular para o próximo step se não for admin
+          setActiveStep(2);
+          return null;
+        }
+        
         return (
           <Stack spacing={3}>
             <Typography variant="h6" gutterBottom>
@@ -275,26 +316,43 @@ const MobileNewReservationContent = () => {
             />
 
             <Stack direction="row" spacing={2}>
-              <TextField
-                sx={{ flex: 1 }}
-                type="time"
-                label="Horário de Início"
-                value={form.startTime}
-                onChange={(e) => handleInputChange('startTime', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                error={!!errors.startTime}
-                helperText={errors.startTime}
-              />
-              <TextField
-                sx={{ flex: 1 }}
-                type="time"
-                label="Horário de Fim"
-                value={form.endTime}
-                onChange={(e) => handleInputChange('endTime', e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                error={!!errors.endTime}
-                helperText={errors.endTime}
-              />
+              <FormControl sx={{ flex: 1 }} error={!!errors.startTime}>
+                <InputLabel>Horário de Início</InputLabel>
+                <Select
+                  value={form.startTime}
+                  label="Horário de Início"
+                  onChange={(e) => handleInputChange('startTime', e.target.value)}
+                >
+                  {Array.from({ length: 16 }, (_, i) => i + 7).map(hour => {
+                    const time = `${hour.toString().padStart(2, '0')}:00`;
+                    return (
+                      <MenuItem key={time} value={time}>
+                        {time}
+                      </MenuItem>
+                    );
+                  })}
+                </Select>
+                {errors.startTime && <FormHelperText>{errors.startTime}</FormHelperText>}
+              </FormControl>
+              
+              <FormControl sx={{ flex: 1 }} error={!!errors.endTime}>
+                <InputLabel>Horário de Fim</InputLabel>
+                <Select
+                  value={form.endTime}
+                  label="Horário de Fim"
+                  onChange={(e) => handleInputChange('endTime', e.target.value)}
+                >
+                  {Array.from({ length: 16 }, (_, i) => i + 7).map(hour => {
+                    const time = `${hour.toString().padStart(2, '0')}:00`;
+                    return (
+                      <MenuItem key={time} value={time}>
+                        {time}
+                      </MenuItem>
+                    );
+                  })}
+                </Select>
+                {errors.endTime && <FormHelperText>{errors.endTime}</FormHelperText>}
+              </FormControl>
             </Stack>
 
             {form.duration > 0 && (
