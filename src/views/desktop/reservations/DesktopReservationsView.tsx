@@ -104,22 +104,29 @@ export const DesktopReservationsView = () => {
       return;
     }
     setCurrentUser(user);
-    loadReservations();
   }, [router]);
+
+  useEffect(() => {
+    if (currentUser) {
+      loadReservations();
+    }
+  }, [currentUser]);
 
   const loadReservations = async () => {
     try {
       setIsLoading(true);
       setError('');
       
+      console.log('🔍 Debug: Carregando reservas...');
+      console.log('🔍 Debug: Usuário atual:', currentUser?.nome, 'Role:', currentUser?.role);
+      
+      // A API já filtra automaticamente baseado no token JWT
+      // Usuarios normais só veem suas reservas, admins veem todas
       const data = await ReservationsService.getAll();
       
-      let userReservations = data;
-      if (!isAdmin && currentUser) {
-        userReservations = data.filter(r => r.userId === currentUser.id);
-      }
+      console.log('🔍 Debug: Reservas recebidas do backend:', data.length);
       
-      setReservations(userReservations);
+      setReservations(data);
     } catch (err) {
       console.error('Erro ao carregar reservas:', err);
       setError('Erro ao carregar reservas');
@@ -559,7 +566,8 @@ export const DesktopReservationsView = () => {
                       </Tooltip>
                       
                       {(isAdmin || reservation.userId === currentUser?.id) &&
-                       !['cancelado', 'cancelled', 'concluido', 'completed'].includes(reservation.status) && (
+                       !['cancelado', 'cancelled', 'concluido', 'completed'].includes(reservation.status) &&
+                       new Date(reservation.dataHoraInicio) > new Date() && (
                         <Tooltip title="Editar">
                           <IconButton 
                             size="small" 
@@ -571,14 +579,14 @@ export const DesktopReservationsView = () => {
                         </Tooltip>
                       )}
                       
-                      <Tooltip title="Mais opções">
+                      {/* <Tooltip title="Mais opções">
                         <IconButton 
                           size="small"
                           onClick={(e) => handleMenuClick(e, reservation)}
                         >
                           <MoreVertIcon fontSize="small" />
                         </IconButton>
-                      </Tooltip>
+                      </Tooltip> */}
                     </Stack>
                   </TableCell>
                 </TableRow>

@@ -191,7 +191,8 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
 
     // Validação de tempo para reservas em geral
     if (form.date) {
-      const selectedDate = new Date(form.date);
+      // Usar date string local para evitar problemas de fuso horário
+      const selectedDate = new Date(form.date + 'T00:00:00');
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Resetar horas para comparar apenas a data
       
@@ -686,7 +687,7 @@ export const DesktopNewReservationView = ({ mode = 'create' }: Props = {}) => {
                         Data
                       </Typography>
                       <Typography variant="body1" fontWeight="bold">
-                        {new Date(form.date).toLocaleDateString('pt-BR', {
+                        {new Date(form.date + 'T00:00:00').toLocaleDateString('pt-BR', {
                           weekday: 'long',
                           day: '2-digit',
                           month: '2-digit',

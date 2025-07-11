@@ -78,9 +78,11 @@ export class ReservationsService {
       const response = await api.get<any>(`/schedule/${id}`);
       
       if (response && typeof response === 'object') {
+        // Verificar se a resposta tem a propriedade 'schedule'
         if ('schedule' in response && response.schedule) {
           return response.schedule;
         }
+        // Verificar se a resposta é diretamente um objeto Schedule
         if ('id' in response && 'dataHoraInicio' in response) {
           return response as Schedule;
         }
@@ -196,12 +198,25 @@ export class ReservationsService {
 
   static async getAll(): Promise<Schedule[]> {
     try {
-      const response = await api.get<Schedule[]>('/schedule');
+      console.log('🔍 Debug: Fazendo GET /schedule...');
+      
+      const response = await api.get<any>('/schedule');
+      
+      console.log('🔍 Debug: Resposta recebida:', response);
+      console.log('🔍 Debug: É array?', Array.isArray(response));
       
       if (Array.isArray(response)) {
+        console.log('🔍 Debug: Retornando', response.length, 'reservas (formato direto)');
         return response;
       }
       
+      // Verificar se a resposta tem a propriedade 'schedules'
+      if (response && typeof response === 'object' && 'schedules' in response && Array.isArray(response.schedules)) {
+        console.log('🔍 Debug: Retornando', response.schedules.length, 'reservas (formato {schedules})');
+        return response.schedules;
+      }
+      
+      console.log('🔍 Debug: Resposta não é array nem objeto com schedules, retornando array vazio');
       return [];
     } catch (error) {
       console.error('Erro ao buscar reservas:', error);

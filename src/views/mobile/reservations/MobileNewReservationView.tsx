@@ -142,7 +142,7 @@ const MobileNewReservationContent = () => {
           if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
           if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
           
-          if (form.date && new Date(form.date) < new Date()) {
+          if (form.date && new Date(form.date + 'T00:00:00') < new Date()) {
             newErrors.date = 'Data não pode ser no passado';
           }
 
@@ -167,7 +167,7 @@ const MobileNewReservationContent = () => {
           if (!form.startTime) newErrors.startTime = 'Selecione o horário de início';
           if (!form.endTime) newErrors.endTime = 'Selecione o horário de fim';
           
-          if (form.date && new Date(form.date) < new Date()) {
+          if (form.date && new Date(form.date + 'T00:00:00') < new Date()) {
             newErrors.date = 'Data não pode ser no passado';
           }
 
@@ -408,7 +408,7 @@ const MobileNewReservationContent = () => {
                   <Box display="flex" alignItems="center" gap={2}>
                     <CalendarIcon color="action" />
                     <Typography>
-                      {new Date(form.date).toLocaleDateString('pt-BR')}
+                      {new Date(form.date + 'T00:00:00').toLocaleDateString('pt-BR')}
                     </Typography>
                   </Box>
 

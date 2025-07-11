@@ -88,11 +88,8 @@ export const DesktopReservationDetailsView = () => {
   const canDelete = () => {
     if (!reservation || !currentUser) return false;
     
-    // Admin pode excluir qualquer reserva
-    if (currentUser.role === 'ADMIN') return true;
-    
-    // Usuário pode excluir apenas suas próprias reservas
-    return reservation.userId === currentUser.id;
+    // Apenas admins podem excluir reservas
+    return currentUser.role === 'ADMIN';
   };
 
   const canCancel = () => {

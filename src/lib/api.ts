@@ -1,6 +1,6 @@
 import { AuthService } from './auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://play.api.beezes.com.br';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3003';
 
 class SimpleApiClient {
   private baseUrl: string;
