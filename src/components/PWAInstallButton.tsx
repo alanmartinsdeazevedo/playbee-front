@@ -101,41 +101,59 @@ const PWAInstallButton = () => {
       <Box sx={{ mb: 3 }}>
         <Alert
           severity="info"
-          variant="outlined"
+          variant="filled"
           action={
             <IconButton
               aria-label="close"
               color="inherit"
               size="small"
               onClick={handleDismiss}
+              sx={{
+                color: 'white',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                }
+              }}
             >
               <CloseIcon fontSize="inherit" />
             </IconButton>
           }
-          sx={{ mb: 2 }}
+          sx={{ 
+            mb: 2,
+            backgroundColor: 'info.main',
+            color: 'white',
+            '& .MuiAlert-icon': {
+              color: 'white',
+            }
+          }}
         >
           Instale o PlayBee para uma experiência melhor!
         </Alert>
         
         <Button
-          variant="outlined"
+          variant="contained"
           startIcon={<InstallMobileIcon />}
           onClick={handleInstallClick}
           disabled={isInstalling}
           fullWidth
           sx={{
-            borderStyle: 'dashed',
-            borderColor: 'primary.main',
-            color: 'primary.main',
+            backgroundColor: 'primary.main',
+            color: 'white',
             py: 1.5,
+            fontSize: '1.1rem',
+            fontWeight: 'bold',
+            boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+            border: '2px solid transparent',
             '&:hover': {
-              borderStyle: 'solid',
-              backgroundColor: 'primary.main',
-              color: 'white',
+              backgroundColor: 'primary.dark',
+              boxShadow: '0 6px 16px rgba(25, 118, 210, 0.4)',
+              transform: 'translateY(-1px)',
             },
             '&:disabled': {
               opacity: 0.7,
-            }
+              transform: 'none',
+            },
+            transition: 'all 0.2s ease-in-out',
           }}
         >
           {isInstalling ? 'Instalando...' : 'Instalar PlayBee'}
