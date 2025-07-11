@@ -1,6 +1,6 @@
 import { AuthService } from './auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3003';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 class SimpleApiClient {
   private baseUrl: string;

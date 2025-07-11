@@ -80,7 +80,7 @@ const MobileLogin = () => {
     >
       <Container maxWidth="sm" sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 4, pt: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: 4 }}>
           <SportsIcon sx={{ fontSize: 64, color: 'white', mb: 2 }} />
           <Typography variant="h3" component="h1" sx={{ color: 'white', fontWeight: 'bold', mb: 1 }}>
             PlayBee
@@ -91,7 +91,7 @@ const MobileLogin = () => {
         </Box>
 
         {/* PWA Install */}
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2 }}>
           <PWAInstallButton />
         </Box>
 
