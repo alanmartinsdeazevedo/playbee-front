@@ -36,7 +36,7 @@ class SimpleApiClient {
       ...(optionsHeaders || {}),
     };
     
-    console.log('🔍 Debug: Headers sendo enviados:', headers);
+    console.log('Debug: Headers sendo enviados:', headers);
 
     try {
       const response = await fetch(url, {
