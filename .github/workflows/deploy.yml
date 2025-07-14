@@ -60,16 +60,48 @@ jobs:
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-    - name: Add SSH known hosts
+    - name: Test SSH connectivity and add known hosts
       run: |
         mkdir -p ~/.ssh
-        ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+        chmod 700 ~/.ssh
+        
+        echo "🔍 Testing connectivity to ${{ secrets.SSH_HOST }}"
+        
+        # Testar conectividade básica primeiro
+        if ! nc -z ${{ secrets.SSH_HOST }} 22; then
+          echo "❌ Cannot connect to SSH port 22"
+          exit 1
+        fi
+        
+        echo "✅ SSH port is reachable"
+        
+        # Adicionar known hosts com timeout
+        echo "🔍 Adding SSH host keys..."
+        timeout 30 ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts || {
+          echo "⚠️ ssh-keyscan with -H failed, trying without..."
+          timeout 30 ssh-keyscan ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+        }
+        
         chmod 644 ~/.ssh/known_hosts
+        
+        # Verificar se foi adicionado
+        if [ -s ~/.ssh/known_hosts ]; then
+          echo "✅ SSH known hosts configured successfully"
+          echo "📋 Known hosts entries: $(wc -l < ~/.ssh/known_hosts)"
+        else
+          echo "❌ Failed to add known hosts"
+          exit 1
+        fi
+
+    - name: Test SSH connection
+      run: |
+        echo "🔑 Testing SSH connection..."
+        ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} 'echo "✅ SSH connection successful"'
 
     # Deploy no servidor EC2
     - name: Deploy PlayBee Frontend
       run: |
-        ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+        ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=yes ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
           echo "🚀 Deploying PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
 
           docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
