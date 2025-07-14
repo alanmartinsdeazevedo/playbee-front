@@ -33,8 +33,20 @@ jobs:
     - name: Build Docker image
       run: |
         echo "🔨 Building PlayBee Frontend version ${{ steps.version.outputs.VERSION }}"
-        docker build -f Dockerfile -t ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }} .
-        docker build -f Dockerfile -t ${{ secrets.DOCKER_IMAGE_NAME }}:latest .
+        docker build -f Dockerfile \
+          --build-arg NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
+          --build-arg NEXT_PUBLIC_APP_NAME="PlayBee" \
+          --build-arg NEXT_PUBLIC_PWA_NAME="PlayBee" \
+          --build-arg NEXT_PUBLIC_PWA_SHORT_NAME="PlayBee" \
+          --build-arg NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
+          -t ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }} .
+        docker build -f Dockerfile \
+          --build-arg NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
+          --build-arg NEXT_PUBLIC_APP_NAME="PlayBee" \
+          --build-arg NEXT_PUBLIC_PWA_NAME="PlayBee" \
+          --build-arg NEXT_PUBLIC_PWA_SHORT_NAME="PlayBee" \
+          --build-arg NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
+          -t ${{ secrets.DOCKER_IMAGE_NAME }}:latest .
 
     # Push Docker
     - name: Push Docker image
@@ -73,11 +85,6 @@ jobs:
 
           # Deploy da nova versão
           docker run -d --name playbee-frontend -p 3002:3002 \
-            -e NEXT_PUBLIC_API_URL="${{ vars.NEXT_PUBLIC_API_URL }}" \
-            -e NEXT_PUBLIC_APP_NAME="PlayBee" \
-            -e NEXT_PUBLIC_PWA_NAME="PlayBee" \
-            -e NEXT_PUBLIC_PWA_SHORT_NAME="PlayBee" \
-            -e NEXT_PUBLIC_APP_URL="${{ vars.NEXT_PUBLIC_APP_URL }}" \
             -e PORT=3002 \
             --restart unless-stopped \
             ${{ secrets.DOCKER_IMAGE_NAME }}:${{ steps.version.outputs.VERSION }}
